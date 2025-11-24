@@ -1,13 +1,19 @@
-use sql_query_analyzer::config::RulesConfig;
-use sql_query_analyzer::query::{parse_queries, SqlDialect};
-use sql_query_analyzer::rules::{RuleRunner, Severity};
-use sql_query_analyzer::schema::Schema;
+use sql_query_analyzer::{
+    config::RulesConfig,
+    query::{SqlDialect, parse_queries},
+    rules::{RuleRunner, Severity},
+    schema::Schema
+};
 
 fn analyze_query(sql: &str) -> Vec<String> {
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     let runner = RuleRunner::new();
     let report = runner.analyze(&queries);
-    report.violations.iter().map(|v| v.rule_id.to_string()).collect()
+    report
+        .violations
+        .iter()
+        .map(|v| v.rule_id.to_string())
+        .collect()
 }
 
 fn analyze_with_schema(sql: &str, schema_sql: &str) -> Vec<String> {
@@ -15,7 +21,11 @@ fn analyze_with_schema(sql: &str, schema_sql: &str) -> Vec<String> {
     let schema = Schema::parse(schema_sql).unwrap();
     let runner = RuleRunner::with_schema_and_config(schema, RulesConfig::default());
     let report = runner.analyze(&queries);
-    report.violations.iter().map(|v| v.rule_id.to_string()).collect()
+    report
+        .violations
+        .iter()
+        .map(|v| v.rule_id.to_string())
+        .collect()
 }
 
 #[test]
@@ -147,7 +157,11 @@ fn test_schema_with_index() {
 fn test_rule_disabled() {
     let queries = parse_queries("SELECT * FROM users", SqlDialect::Generic).unwrap();
     let config = RulesConfig {
-        disabled: vec!["PERF001".to_string(), "PERF011".to_string(), "STYLE001".to_string()],
+        disabled: vec![
+            "PERF001".to_string(),
+            "PERF011".to_string(),
+            "STYLE001".to_string(),
+        ],
         ..Default::default()
     };
     let runner = RuleRunner::with_config(config);
@@ -200,7 +214,8 @@ fn test_no_violations_for_good_query() {
     let queries = parse_queries(
         "SELECT id, name FROM users WHERE id = 1 LIMIT 10",
         SqlDialect::Generic
-    ).unwrap();
+    )
+    .unwrap();
     let runner = RuleRunner::new();
     let report = runner.analyze(&queries);
 
@@ -221,7 +236,8 @@ fn test_insert_no_violations() {
     let queries = parse_queries(
         "INSERT INTO users (id, name) VALUES (1, 'test')",
         SqlDialect::Generic
-    ).unwrap();
+    )
+    .unwrap();
     let runner = RuleRunner::new();
     let report = runner.analyze(&queries);
 

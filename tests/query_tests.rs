@@ -1,4 +1,4 @@
-use sql_query_analyzer::query::{parse_queries, QueryType, SqlDialect};
+use sql_query_analyzer::query::{QueryType, SqlDialect, parse_queries};
 
 #[test]
 fn test_parse_simple_select() {
@@ -106,7 +106,12 @@ fn test_parse_order_by() {
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
 
     assert_eq!(queries.len(), 1);
-    assert!(queries[0].order_cols.iter().any(|c| c.as_str() == "created_at"));
+    assert!(
+        queries[0]
+            .order_cols
+            .iter()
+            .any(|c| c.as_str() == "created_at")
+    );
     assert!(queries[0].order_cols.iter().any(|c| c.as_str() == "name"));
 }
 
@@ -235,7 +240,12 @@ fn test_parse_between() {
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
 
     assert_eq!(queries.len(), 1);
-    assert!(queries[0].where_cols.iter().any(|c| c.as_str() == "created_at"));
+    assert!(
+        queries[0]
+            .where_cols
+            .iter()
+            .any(|c| c.as_str() == "created_at")
+    );
 }
 
 #[test]
