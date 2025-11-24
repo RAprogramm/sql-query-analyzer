@@ -3,6 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/sql-query-analyzer.svg)](https://crates.io/crates/sql-query-analyzer)
 [![Docs.rs](https://docs.rs/sql-query-analyzer/badge.svg)](https://docs.rs/sql-query-analyzer)
 [![CI](https://github.com/RAprogramm/sql-query-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/RAprogramm/sql-query-analyzer/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/RAprogramm/sql-query-analyzer/graph/badge.svg?token=hKvq66JThf)](https://codecov.io/gh/RAprogramm/sql-query-analyzer)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **Static analysis and LLM-powered optimization for SQL queries.**
