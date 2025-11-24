@@ -290,6 +290,23 @@ jobs:
 | `warning-count` | Number of warnings found |
 | `exit-code` | Exit code (0=ok, 1=warnings, 2=errors) |
 
+#### Static Analysis Only (No LLM)
+
+For fast CI checks without external API calls:
+
+```yaml
+- uses: RAprogramm/sql-query-analyzer@v1
+  with:
+    schema: db/schema.sql
+    queries: db/queries.sql
+    fail-on-error: 'true'
+    post-comment: 'true'
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+This runs all 18 built-in rules instantly without requiring any API keys.
+
 #### Advanced Usage
 
 ```yaml
