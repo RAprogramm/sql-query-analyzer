@@ -46,6 +46,23 @@ jobs:
               - '**/*.yml'
               - '**/*.md'
 
+  pr-size:
+    name: PR Size Check
+    runs-on: ubuntu-latest
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.rust == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: RAprogramm/rust-prod-diff-checker@v1
+        with:
+          max-lines: 200
+          format: comment
+          post-comment: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   fmt:
     name: Format
     runs-on: ubuntu-latest
