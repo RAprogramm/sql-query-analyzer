@@ -13,7 +13,7 @@ pub struct ExtractionContext<'a> {
     pub window_funcs: &'a mut Vec<WindowFunction>,
     pub has_union:    &'a mut bool,
     pub has_distinct: &'a mut bool,
-    pub has_subquery: &'a mut bool,
+    pub has_subquery: &'a mut bool
 }
 
 pub fn extract_from_set_expr(set_expr: &sqlparser::ast::SetExpr, ctx: &mut ExtractionContext<'_>) {
@@ -25,7 +25,9 @@ pub fn extract_from_set_expr(set_expr: &sqlparser::ast::SetExpr, ctx: &mut Extra
 
             for item in &select.projection {
                 if let sqlparser::ast::SelectItem::UnnamedExpr(expr)
-                    | sqlparser::ast::SelectItem::ExprWithAlias { expr, .. } = item
+                | sqlparser::ast::SelectItem::ExprWithAlias {
+                    expr, ..
+                } = item
                 {
                     extract_window_functions(expr, ctx.window_funcs);
                     if contains_subquery(expr) {
@@ -71,7 +73,11 @@ pub fn extract_from_set_expr(set_expr: &sqlparser::ast::SetExpr, ctx: &mut Extra
                 extract_columns_from_expr(having, ctx.having_cols);
             }
         }
-        SetExpr::SetOperation { left, right, .. } => {
+        SetExpr::SetOperation {
+            left,
+            right,
+            ..
+        } => {
             *ctx.has_union = true;
             extract_from_set_expr(left, ctx);
             extract_from_set_expr(right, ctx);
@@ -87,22 +93,32 @@ pub fn extract_from_set_expr(set_expr: &sqlparser::ast::SetExpr, ctx: &mut Extra
             }
             extract_from_set_expr(&query.body, ctx);
         }
-        SetExpr::Values(_) | SetExpr::Insert(_) | SetExpr::Update(_)
-        | SetExpr::Table(_) | SetExpr::Delete(_) | SetExpr::Merge(_) => {}
+        SetExpr::Values(_)
+        | SetExpr::Insert(_)
+        | SetExpr::Update(_)
+        | SetExpr::Table(_)
+        | SetExpr::Delete(_)
+        | SetExpr::Merge(_) => {}
     }
 }
 
 pub fn extract_from_table_factor(
     table_factor: &sqlparser::ast::TableFactor,
-    tables: &mut IndexSet<CompactString>,
+    tables: &mut IndexSet<CompactString>
 ) {
     use sqlparser::ast::TableFactor;
 
     match table_factor {
-        TableFactor::Table { name, .. } => {
+        TableFactor::Table {
+            name, ..
+        } => {
             tables.insert(name.to_string().into());
         }
-        TableFactor::Derived { subquery, alias, .. } => {
+        TableFactor::Derived {
+            subquery,
+            alias,
+            ..
+        } => {
             if let Some(alias) = alias {
                 tables.insert(format!("(subquery) AS {}", alias.name.value).into());
             }
@@ -116,19 +132,23 @@ pub fn extract_from_table_factor(
             let mut has_subquery = false;
             let mut ctx = ExtractionContext {
                 tables,
-                where_cols:   &mut sub_where,
-                join_cols:    &mut sub_join,
-                group_cols:   &mut sub_group,
-                having_cols:  &mut sub_having,
+                where_cols: &mut sub_where,
+                join_cols: &mut sub_join,
+                group_cols: &mut sub_group,
+                having_cols: &mut sub_having,
                 window_funcs: &mut sub_windows,
-                has_union:    &mut has_union,
+                has_union: &mut has_union,
                 has_distinct: &mut has_distinct,
                 has_subquery: &mut has_subquery
             };
             extract_from_set_expr(&subquery.body, &mut ctx);
         }
-        TableFactor::TableFunction { .. } => {}
-        TableFactor::NestedJoin { table_with_joins, .. } => {
+        TableFactor::TableFunction {
+            ..
+        } => {}
+        TableFactor::NestedJoin {
+            table_with_joins, ..
+        } => {
             extract_from_table_factor(&table_with_joins.relation, tables);
             for join in &table_with_joins.joins {
                 extract_from_table_factor(&join.relation, tables);
@@ -138,7 +158,10 @@ pub fn extract_from_table_factor(
     }
 }
 
-pub fn extract_columns_from_expr(expr: &sqlparser::ast::Expr, columns: &mut IndexSet<CompactString>) {
+pub fn extract_columns_from_expr(
+    expr: &sqlparser::ast::Expr,
+    columns: &mut IndexSet<CompactString>
+) {
     use sqlparser::ast::Expr;
 
     match expr {
@@ -150,24 +173,44 @@ pub fn extract_columns_from_expr(expr: &sqlparser::ast::Expr, columns: &mut Inde
                 columns.insert(col.value.as_str().into());
             }
         }
-        Expr::BinaryOp { left, right, .. } => {
+        Expr::BinaryOp {
+            left,
+            right,
+            ..
+        } => {
             extract_columns_from_expr(left, columns);
             extract_columns_from_expr(right, columns);
         }
-        Expr::UnaryOp { expr, .. } => {
+        Expr::UnaryOp {
+            expr, ..
+        } => {
             extract_columns_from_expr(expr, columns);
         }
-        Expr::InList { expr, list, .. } => {
+        Expr::InList {
+            expr,
+            list,
+            ..
+        } => {
             extract_columns_from_expr(expr, columns);
             for item in list {
                 extract_columns_from_expr(item, columns);
             }
         }
-        Expr::InSubquery { expr, .. } => {
+        Expr::InSubquery {
+            expr, ..
+        } => {
             extract_columns_from_expr(expr, columns);
         }
-        Expr::Subquery(_) | Expr::Exists { .. } => {}
-        Expr::Between { expr, low, high, .. } => {
+        Expr::Subquery(_)
+        | Expr::Exists {
+            ..
+        } => {}
+        Expr::Between {
+            expr,
+            low,
+            high,
+            ..
+        } => {
             extract_columns_from_expr(expr, columns);
             extract_columns_from_expr(low, columns);
             extract_columns_from_expr(high, columns);
@@ -190,7 +233,12 @@ pub fn extract_columns_from_expr(expr: &sqlparser::ast::Expr, columns: &mut Inde
                 }
             }
         }
-        Expr::Case { operand, conditions, else_result, .. } => {
+        Expr::Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => {
             if let Some(op) = operand {
                 extract_columns_from_expr(op, columns);
             }
@@ -202,10 +250,14 @@ pub fn extract_columns_from_expr(expr: &sqlparser::ast::Expr, columns: &mut Inde
                 extract_columns_from_expr(else_res, columns);
             }
         }
-        Expr::Cast { expr, .. } => {
+        Expr::Cast {
+            expr, ..
+        } => {
             extract_columns_from_expr(expr, columns);
         }
-        Expr::Extract { expr, .. } => {
+        Expr::Extract {
+            expr, ..
+        } => {
             extract_columns_from_expr(expr, columns);
         }
         _ => {}
@@ -246,7 +298,7 @@ fn extract_window_functions(expr: &sqlparser::ast::Expr, windows: &mut Vec<Windo
                 windows.push(WindowFunction {
                     name: func.name.to_string().into(),
                     partition_cols,
-                    order_cols,
+                    order_cols
                 });
             }
 
@@ -261,12 +313,21 @@ fn extract_window_functions(expr: &sqlparser::ast::Expr, windows: &mut Vec<Windo
                 }
             }
         }
-        Expr::BinaryOp { left, right, .. } => {
+        Expr::BinaryOp {
+            left,
+            right,
+            ..
+        } => {
             extract_window_functions(left, windows);
             extract_window_functions(right, windows);
         }
         Expr::Nested(e) => extract_window_functions(e, windows),
-        Expr::Case { operand, conditions, else_result, .. } => {
+        Expr::Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => {
             if let Some(op) = operand {
                 extract_window_functions(op, windows);
             }
@@ -286,17 +347,34 @@ fn contains_subquery(expr: &sqlparser::ast::Expr) -> bool {
     use sqlparser::ast::Expr;
 
     match expr {
-        Expr::Subquery(_) | Expr::InSubquery { .. } | Expr::Exists { .. } => true,
-        Expr::BinaryOp { left, right, .. } => {
-            contains_subquery(left) || contains_subquery(right)
+        Expr::Subquery(_)
+        | Expr::InSubquery {
+            ..
         }
+        | Expr::Exists {
+            ..
+        } => true,
+        Expr::BinaryOp {
+            left,
+            right,
+            ..
+        } => contains_subquery(left) || contains_subquery(right),
         Expr::Nested(e) => contains_subquery(e),
-        Expr::InList { expr, list, .. } => {
-            contains_subquery(expr) || list.iter().any(contains_subquery)
-        }
-        Expr::Case { operand, conditions, else_result, .. } => {
+        Expr::InList {
+            expr,
+            list,
+            ..
+        } => contains_subquery(expr) || list.iter().any(contains_subquery),
+        Expr::Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => {
             operand.as_ref().is_some_and(|o| contains_subquery(o))
-                || conditions.iter().any(|cw| contains_subquery(&cw.condition) || contains_subquery(&cw.result))
+                || conditions
+                    .iter()
+                    .any(|cw| contains_subquery(&cw.condition) || contains_subquery(&cw.result))
                 || else_result.as_ref().is_some_and(|e| contains_subquery(e))
         }
         _ => false

@@ -10,29 +10,30 @@ pub type ColumnVec = SmallVec<[CompactString; 8]>;
 /// Parsed SQL query with metadata
 #[derive(Debug, Clone, Serialize)]
 pub struct Query {
-    pub raw:           String,
-    pub query_type:    QueryType,
-    pub tables:        Vec<CompactString>,
-    pub cte_names:     Vec<CompactString>,
-    pub where_cols:    ColumnVec,
-    pub join_cols:     ColumnVec,
-    pub order_cols:    ColumnVec,
-    pub group_cols:    ColumnVec,
-    pub having_cols:   ColumnVec,
-    pub window_funcs:  Vec<WindowFunction>,
-    pub limit:         Option<u64>,
-    pub offset:        Option<u64>,
-    pub has_union:     bool,
-    pub has_distinct:  bool,
-    pub has_subquery:  bool,
+    pub raw:          String,
+    pub query_type:   QueryType,
+    pub tables:       Vec<CompactString>,
+    pub cte_names:    Vec<CompactString>,
+    pub where_cols:   ColumnVec,
+    pub join_cols:    ColumnVec,
+    pub order_cols:   ColumnVec,
+    pub group_cols:   ColumnVec,
+    pub having_cols:  ColumnVec,
+    pub window_funcs: Vec<WindowFunction>,
+    pub limit:        Option<u64>,
+    pub offset:       Option<u64>,
+    pub has_union:    bool,
+    pub has_distinct: bool,
+    pub has_subquery: bool,
     #[serde(skip)]
-    complexity_cell:   OnceLock<QueryComplexity>,
+    complexity_cell:  OnceLock<QueryComplexity>
 }
 
 impl Query {
     /// Get complexity (lazily calculated)
     pub fn complexity(&self) -> &QueryComplexity {
-        self.complexity_cell.get_or_init(|| calculate_complexity(self))
+        self.complexity_cell
+            .get_or_init(|| calculate_complexity(self))
     }
 }
 
@@ -41,19 +42,19 @@ impl Query {
 pub struct WindowFunction {
     pub name:           CompactString,
     pub partition_cols: Vec<CompactString>,
-    pub order_cols:     Vec<CompactString>,
+    pub order_cols:     Vec<CompactString>
 }
 
 /// Query complexity metrics
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct QueryComplexity {
-    pub score:          u32,
-    pub table_count:    u32,
-    pub join_count:     u32,
-    pub subquery_count: u32,
-    pub condition_count: u32,
+    pub score:             u32,
+    pub table_count:       u32,
+    pub join_count:        u32,
+    pub subquery_count:    u32,
+    pub condition_count:   u32,
     pub aggregation_count: u32,
-    pub window_count:   u32
+    pub window_count:      u32
 }
 
 /// Type of SQL query
@@ -84,7 +85,7 @@ impl Default for Query {
             has_union:       false,
             has_distinct:    false,
             has_subquery:    false,
-            complexity_cell: OnceLock::new(),
+            complexity_cell: OnceLock::new()
         }
     }
 }

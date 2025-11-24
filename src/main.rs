@@ -17,8 +17,8 @@ use crate::{
     config::Config,
     error::{AppResult, config_error, file_read_error},
     llm::{LlmClient, LlmProvider},
-    output::{format_analysis_result, format_queries_summary, OutputFormat, OutputOptions},
-    query::{parse_queries, SqlDialect},
+    output::{OutputFormat, OutputOptions, format_analysis_result, format_queries_summary},
+    query::{SqlDialect, parse_queries},
     schema::Schema
 };
 

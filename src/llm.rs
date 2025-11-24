@@ -174,15 +174,18 @@ Provide specific, actionable recommendations."#,
 
     async fn call_provider(&self, prompt: &str) -> AppResult<String> {
         match &self.provider {
-            LlmProvider::OpenAI { api_key, model } => {
-                self.call_openai(api_key, model, prompt).await
-            }
-            LlmProvider::Anthropic { api_key, model } => {
-                self.call_anthropic(api_key, model, prompt).await
-            }
-            LlmProvider::Ollama { base_url, model } => {
-                self.call_ollama(base_url, model, prompt).await
-            }
+            LlmProvider::OpenAI {
+                api_key,
+                model
+            } => self.call_openai(api_key, model, prompt).await,
+            LlmProvider::Anthropic {
+                api_key,
+                model
+            } => self.call_anthropic(api_key, model, prompt).await,
+            LlmProvider::Ollama {
+                base_url,
+                model
+            } => self.call_ollama(base_url, model, prompt).await
         }
     }
 

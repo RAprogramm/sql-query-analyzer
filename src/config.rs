@@ -8,7 +8,7 @@ use crate::error::{AppResult, config_error};
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Config {
     #[serde(default)]
-    pub llm: LlmConfig,
+    pub llm:   LlmConfig,
     #[serde(default)]
     pub retry: RetryConfig
 }
@@ -72,9 +72,8 @@ impl Config {
                 .join("config.toml");
 
             if home_config.exists() {
-                let content = fs::read_to_string(&home_config).map_err(|e| {
-                    config_error(format!("Failed to read config file: {}", e))
-                })?;
+                let content = fs::read_to_string(&home_config)
+                    .map_err(|e| config_error(format!("Failed to read config file: {}", e)))?;
                 config = toml::from_str(&content)
                     .map_err(|e| config_error(format!("Invalid config file: {}", e)))?;
             }

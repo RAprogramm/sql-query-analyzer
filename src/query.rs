@@ -1,16 +1,16 @@
 mod extract;
 mod types;
 
+use extract::{ExtractionContext, extract_columns_from_expr, extract_from_set_expr};
 use indexmap::IndexSet;
 use rayon::prelude::*;
 use sqlparser::{
     dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect},
-    parser::Parser,
+    parser::Parser
 };
-
 pub use types::{Query, QueryType};
+
 use crate::error::{AppResult, query_parse_error};
-use extract::{extract_columns_from_expr, extract_from_set_expr, ExtractionContext};
 
 /// SQL dialect for parsing
 #[derive(Debug, Clone, Copy, Default)]
@@ -36,14 +36,11 @@ impl SqlDialect {
 /// Parse multiple SQL queries from string (parallel)
 pub fn parse_queries(sql: &str, dialect: SqlDialect) -> AppResult<Vec<Query>> {
     let parser_dialect = dialect.into_parser_dialect();
-    let statements =
-        Parser::parse_sql(parser_dialect.as_ref(), sql).map_err(|e| query_parse_error(e.to_string()))?;
+    let statements = Parser::parse_sql(parser_dialect.as_ref(), sql)
+        .map_err(|e| query_parse_error(e.to_string()))?;
 
     // Parse statements in parallel for better performance
-    let queries: Result<Vec<_>, _> = statements
-        .into_par_iter()
-        .map(parse_statement)
-        .collect();
+    let queries: Result<Vec<_>, _> = statements.into_par_iter().map(parse_statement).collect();
 
     queries
 }
@@ -60,7 +57,11 @@ fn parse_statement(stmt: sqlparser::ast::Statement) -> AppResult<Query> {
             q.tables.push(insert.table.to_string().into());
             Ok(q)
         }
-        Statement::Update { table, selection, .. } => {
+        Statement::Update {
+            table,
+            selection,
+            ..
+        } => {
             let mut q = Query::new(raw, QueryType::Update);
             q.tables.push(table.relation.to_string().into());
 
@@ -97,14 +98,23 @@ fn parse_select_query(raw: String, query: sqlparser::ast::Query) -> AppResult<Qu
     let mut q = Query::new(raw, QueryType::Select);
 
     // Extract CTEs
-    for cte in &query.with.iter().flat_map(|w| &w.cte_tables).collect::<Vec<_>>() {
+    for cte in &query
+        .with
+        .iter()
+        .flat_map(|w| &w.cte_tables)
+        .collect::<Vec<_>>()
+    {
         q.cte_names.push(cte.alias.name.value.as_str().into());
     }
 
     // Extract LIMIT/OFFSET
     if let Some(limit_clause) = &query.limit_clause {
         match limit_clause {
-            sqlparser::ast::LimitClause::LimitOffset { limit, offset, .. } => {
+            sqlparser::ast::LimitClause::LimitOffset {
+                limit,
+                offset,
+                ..
+            } => {
                 if let Some(sqlparser::ast::Expr::Value(val)) = limit
                     && let sqlparser::ast::Value::Number(n, _) = &val.value
                 {
@@ -117,7 +127,11 @@ fn parse_select_query(raw: String, query: sqlparser::ast::Query) -> AppResult<Qu
                     q.offset = n.parse().ok();
                 }
             }
-            sqlparser::ast::LimitClause::OffsetCommaLimit { offset, limit, .. } => {
+            sqlparser::ast::LimitClause::OffsetCommaLimit {
+                offset,
+                limit,
+                ..
+            } => {
                 if let sqlparser::ast::Expr::Value(val) = limit
                     && let sqlparser::ast::Value::Number(n, _) = &val.value
                 {

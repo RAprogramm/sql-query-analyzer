@@ -79,7 +79,10 @@ fn extract_position(message: &str) -> Option<SqlPosition> {
             let col_str = &message[col_num_start..col_num_start + col_end];
 
             if let (Ok(line), Ok(column)) = (line_str.parse(), col_str.parse()) {
-                return Some(SqlPosition { line, column });
+                return Some(SqlPosition {
+                    line,
+                    column
+                });
             }
         }
     }

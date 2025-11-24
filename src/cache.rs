@@ -1,23 +1,26 @@
-use std::collections::HashMap;
-use std::hash::{DefaultHasher, Hash, Hasher};
-use std::sync::{LazyLock, RwLock};
+use std::{
+    collections::HashMap,
+    hash::{DefaultHasher, Hash, Hasher},
+    sync::{LazyLock, RwLock}
+};
 
 use crate::query::Query;
 
 /// Global query cache
-static QUERY_CACHE: LazyLock<RwLock<QueryCache>> = LazyLock::new(|| RwLock::new(QueryCache::new(1000)));
+static QUERY_CACHE: LazyLock<RwLock<QueryCache>> =
+    LazyLock::new(|| RwLock::new(QueryCache::new(1000)));
 
 /// LRU-like cache for parsed queries
 pub struct QueryCache {
     cache:    HashMap<u64, Vec<Query>>,
-    max_size: usize,
+    max_size: usize
 }
 
 impl QueryCache {
     pub fn new(max_size: usize) -> Self {
         Self {
             cache: HashMap::with_capacity(max_size),
-            max_size,
+            max_size
         }
     }
 

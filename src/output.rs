@@ -144,15 +144,26 @@ fn format_text_summary(queries: &[Query], opts: &OutputOptions) -> String {
         if opts.verbose {
             let c = query.complexity();
             let complexity_label = if c.score < 5 {
-                if opts.colored { "Low".green().to_string() } else { "Low".to_string() }
+                if opts.colored {
+                    "Low".green().to_string()
+                } else {
+                    "Low".to_string()
+                }
             } else if c.score < 15 {
-                if opts.colored { "Medium".yellow().to_string() } else { "Medium".to_string() }
+                if opts.colored {
+                    "Medium".yellow().to_string()
+                } else {
+                    "Medium".to_string()
+                }
             } else if opts.colored {
                 "High".red().to_string()
             } else {
                 "High".to_string()
             };
-            summary.push_str(&format!("Complexity: {} (score: {})\n", complexity_label, c.score));
+            summary.push_str(&format!(
+                "Complexity: {} (score: {})\n",
+                complexity_label, c.score
+            ));
         }
 
         summary.push('\n');
