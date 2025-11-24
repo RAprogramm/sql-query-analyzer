@@ -291,7 +291,7 @@ jobs:
     name: Publish to crates.io
     needs: [release-build]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '.')
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
