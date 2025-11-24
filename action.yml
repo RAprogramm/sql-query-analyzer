@@ -1,5 +1,5 @@
 name: 'SQL Query Analyzer'
-description: 'Analyze SQL queries for performance optimization using LLM'
+description: 'Static analysis for SQL queries with 18 built-in rules. Detects performance issues, security vulnerabilities, and style violations.'
 author: 'RAprogramm'
 
 branding:
@@ -11,93 +11,170 @@ inputs:
     description: 'Path to SQL schema file'
     required: true
   queries:
-    description: 'Path to SQL queries file'
+    description: 'Path to SQL queries file (use - for stdin)'
     required: true
-  provider:
-    description: 'LLM provider (ollama, open-ai, anthropic)'
+  dialect:
+    description: 'SQL dialect (generic, mysql, postgresql, sqlite)'
     required: false
-    default: 'anthropic'
-  api_key:
-    description: 'API key for LLM provider'
-    required: true
-  model:
-    description: 'Model name'
+    default: 'generic'
+  format:
+    description: 'Output format (text, json, yaml, sarif)'
+    required: false
+    default: 'text'
+  fail-on-warning:
+    description: 'Fail if warnings are found'
+    required: false
+    default: 'false'
+  fail-on-error:
+    description: 'Fail if errors are found'
+    required: false
+    default: 'true'
+  disabled-rules:
+    description: 'Comma-separated list of rule IDs to disable'
     required: false
     default: ''
-  post_comment:
+  post-comment:
     description: 'Post analysis as PR comment'
     required: false
     default: 'false'
-  update_comment:
+  update-comment:
     description: 'Update existing comment instead of creating new'
     required: false
     default: 'true'
+  upload-sarif:
+    description: 'Upload SARIF results to GitHub Security tab'
+    required: false
+    default: 'false'
 
 outputs:
   analysis:
-    description: 'Analysis result from LLM'
+    description: 'Analysis result'
     value: ${{ steps.analyze.outputs.analysis }}
+  error-count:
+    description: 'Number of errors found'
+    value: ${{ steps.analyze.outputs.error_count }}
+  warning-count:
+    description: 'Number of warnings found'
+    value: ${{ steps.analyze.outputs.warning_count }}
+  exit-code:
+    description: 'Exit code (0=ok, 1=warnings, 2=errors)'
+    value: ${{ steps.analyze.outputs.exit_code }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Setup Rust
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        toolchain: stable
-
-    - name: Build analyzer
+    - name: Download sql-query-analyzer
       shell: bash
       run: |
-        cd ${{ github.action_path }}
-        cargo build --release
+        VERSION="v0.1.0"
+        ARCH="x86_64-unknown-linux-gnu"
+        URL="https://github.com/RAprogramm/sql-query-analyzer/releases/download/${VERSION}/sql-query-analyzer-${ARCH}.tar.gz"
+
+        curl -sL "$URL" | tar xz -C /tmp
+        chmod +x /tmp/sql_query_analyzer
+        echo "/tmp" >> $GITHUB_PATH
 
     - name: Run analysis
       id: analyze
       shell: bash
       run: |
         ARGS="analyze -s ${{ inputs.schema }} -q ${{ inputs.queries }}"
-        ARGS="$ARGS -p ${{ inputs.provider }}"
-        ARGS="$ARGS --api-key ${{ inputs.api_key }}"
+        ARGS="$ARGS --dialect ${{ inputs.dialect }}"
+        ARGS="$ARGS -f ${{ inputs.format }}"
+        ARGS="$ARGS --no-color"
 
-        if [ -n "${{ inputs.model }}" ]; then
-          ARGS="$ARGS -m ${{ inputs.model }}"
-        fi
-
-        OUTPUT=$(${{ github.action_path }}/target/release/sql_query_analyzer $ARGS)
+        OUTPUT=$(sql_query_analyzer $ARGS 2>&1) || EXIT_CODE=$?
+        EXIT_CODE=${EXIT_CODE:-0}
 
         echo "$OUTPUT"
 
-        echo "analysis<<EOF" >> $GITHUB_OUTPUT
-        echo "$OUTPUT" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        ERROR_COUNT=$(echo "$OUTPUT" | grep -oP '\d+(?= error)' | head -1 || echo "0")
+        WARNING_COUNT=$(echo "$OUTPUT" | grep -oP '\d+(?= warning)' | head -1 || echo "0")
+
+        echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+        echo "error_count=${ERROR_COUNT:-0}" >> $GITHUB_OUTPUT
+        echo "warning_count=${WARNING_COUNT:-0}" >> $GITHUB_OUTPUT
+
+        {
+          echo "analysis<<EOF"
+          echo "$OUTPUT"
+          echo "EOF"
+        } >> $GITHUB_OUTPUT
+
+    - name: Generate SARIF
+      id: sarif
+      if: inputs.upload-sarif == 'true'
+      shell: bash
+      run: |
+        sql_query_analyzer analyze \
+          -s ${{ inputs.schema }} \
+          -q ${{ inputs.queries }} \
+          --dialect ${{ inputs.dialect }} \
+          -f sarif > results.sarif || true
+
+    - name: Upload SARIF
+      if: inputs.upload-sarif == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: results.sarif
+        category: sql-query-analyzer
 
     - name: Post PR comment
-      if: inputs.post_comment == 'true' && github.event_name == 'pull_request'
+      if: inputs.post-comment == 'true' && github.event_name == 'pull_request'
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        MARKER="<!-- sql-query-analyzer-comment -->"
+        MARKER="<!-- sql-query-analyzer -->"
         PR_NUMBER=${{ github.event.pull_request.number }}
+
+        if [ "${{ steps.analyze.outputs.exit_code }}" = "0" ]; then
+          STATUS="✅ No issues found"
+        elif [ "${{ steps.analyze.outputs.exit_code }}" = "1" ]; then
+          STATUS="⚠️ ${{ steps.analyze.outputs.warning_count }} warning(s) found"
+        else
+          STATUS="❌ ${{ steps.analyze.outputs.error_count }} error(s), ${{ steps.analyze.outputs.warning_count }} warning(s) found"
+        fi
+
         COMMENT="${MARKER}
         ## SQL Query Analysis
 
-        ${{ steps.analyze.outputs.analysis }}"
+        ${STATUS}
 
-        if [ "${{ inputs.update_comment }}" = "true" ]; then
+        <details>
+        <summary>Details</summary>
+
+        \`\`\`
+        ${{ steps.analyze.outputs.analysis }}
+        \`\`\`
+
+        </details>"
+
+        if [ "${{ inputs.update-comment }}" = "true" ]; then
           EXISTING=$(gh api repos/${{ github.repository }}/issues/${PR_NUMBER}/comments \
             --jq ".[] | select(.body | contains(\"${MARKER}\")) | .id" | head -1)
 
           if [ -n "$EXISTING" ]; then
             gh api repos/${{ github.repository }}/issues/comments/${EXISTING} \
               -X PATCH -f body="$COMMENT"
-            echo "Updated existing comment"
           else
             gh pr comment $PR_NUMBER --body "$COMMENT"
-            echo "Created new comment"
           fi
         else
           gh pr comment $PR_NUMBER --body "$COMMENT"
-          echo "Created new comment"
+        fi
+
+    - name: Check result
+      shell: bash
+      run: |
+        EXIT_CODE=${{ steps.analyze.outputs.exit_code }}
+
+        if [ "$EXIT_CODE" = "2" ] && [ "${{ inputs.fail-on-error }}" = "true" ]; then
+          echo "::error::SQL analysis found errors"
+          exit 1
+        fi
+
+        if [ "$EXIT_CODE" = "1" ] && [ "${{ inputs.fail-on-warning }}" = "true" ]; then
+          echo "::warning::SQL analysis found warnings"
+          exit 1
         fi
