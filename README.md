@@ -357,6 +357,31 @@ The idea for this tool came from [Yegor Bugayenko](https://www.yegor256.com/):
 
 > It would be great to have a tool that takes two inputs: 1) the entire database schema in SQL, and 2) all SQL queries that my web app issues to the database during unit testing. The tool should use an LLM to analyze the queries and identify which ones are suboptimal, especially with respect to the existing indexes.
 
+## Coverage
+
+<details>
+<summary>Coverage Graphs</summary>
+
+### Sunburst
+
+The inner-most circle is the entire project, moving away from the center are folders then, finally, a single file. The size and color of each slice is representing the number of statements and the coverage, respectively.
+
+![Sunburst](https://codecov.io/gh/RAprogramm/sql-query-analyzer/graphs/sunburst.svg?token=hKvq66JThf)
+
+### Grid
+
+Each block represents a single file in the project. The size and color of each block is represented by the number of statements and the coverage, respectively.
+
+![Grid](https://codecov.io/gh/RAprogramm/sql-query-analyzer/graphs/tree.svg?token=hKvq66JThf)
+
+### Icicle
+
+The top section represents the entire project. Proceeding with folders and finally individual files. The size and color of each slice is representing the number of statements and the coverage, respectively.
+
+![Icicle](https://codecov.io/gh/RAprogramm/sql-query-analyzer/graphs/icicle.svg?token=hKvq66JThf)
+
+</details>
+
 ## License
 
 [MIT](LICENSE) © 2025
