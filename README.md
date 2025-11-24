@@ -240,7 +240,9 @@ Query #2:
 
 ## CI/CD Integration
 
-### GitHub Actions
+### GitHub Action
+
+The easiest way to integrate SQL Query Analyzer into your CI/CD pipeline.
 
 ```yaml
 name: SQL Analysis
@@ -256,12 +258,76 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: RAprogramm/sql-query-analyzer@v1
+        with:
+          schema: db/schema.sql
+          queries: db/queries.sql
+          upload-sarif: 'true'
+          post-comment: 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+#### Action Inputs
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `schema` | Path to SQL schema file | required |
+| `queries` | Path to SQL queries file | required |
+| `dialect` | SQL dialect (generic, mysql, postgresql, sqlite) | `generic` |
+| `format` | Output format (text, json, yaml, sarif) | `text` |
+| `fail-on-warning` | Fail if warnings are found | `false` |
+| `fail-on-error` | Fail if errors are found | `true` |
+| `upload-sarif` | Upload SARIF to GitHub Security tab | `false` |
+| `post-comment` | Post analysis as PR comment | `false` |
+
+#### Action Outputs
+
+| Output | Description |
+|--------|-------------|
+| `analysis` | Full analysis result |
+| `error-count` | Number of errors found |
+| `warning-count` | Number of warnings found |
+| `exit-code` | Exit code (0=ok, 1=warnings, 2=errors) |
+
+#### Advanced Usage
+
+```yaml
+- uses: RAprogramm/sql-query-analyzer@v1
+  id: sql-analysis
+  with:
+    schema: db/schema.sql
+    queries: db/queries.sql
+    dialect: postgresql
+    format: sarif
+    fail-on-warning: 'true'
+    upload-sarif: 'true'
+    post-comment: 'true'
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+- name: Check results
+  if: steps.sql-analysis.outputs.error-count > 0
+  run: echo "Found ${{ steps.sql-analysis.outputs.error-count }} errors"
+```
+
+### Manual Installation
+
+For environments where the action is not available:
+
+```yaml
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Install sql-query-analyzer
-        run: cargo install sql-query-analyzer
+        run: cargo install sql_query_analyzer
 
       - name: Analyze SQL
         run: |
-          sql-query-analyzer analyze \
+          sql_query_analyzer analyze \
             -s db/schema.sql \
             -q db/queries.sql \
             -f sarif > results.sarif
