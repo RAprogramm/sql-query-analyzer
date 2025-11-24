@@ -1,7 +1,10 @@
 use colored::Colorize;
 use serde::Serialize;
 
-use crate::query::Query;
+use crate::{
+    query::Query,
+    rules::{AnalysisReport, Severity}
+};
 
 /// Output format for results
 #[derive(Debug, Clone, Copy, Default)]
@@ -9,7 +12,8 @@ pub enum OutputFormat {
     #[default]
     Text,
     Json,
-    Yaml
+    Yaml,
+    Sarif
 }
 
 /// Output options
@@ -40,7 +44,9 @@ pub struct AnalysisResult {
 /// Format queries summary based on output options
 pub fn format_queries_summary(queries: &[Query], opts: &OutputOptions) -> String {
     match opts.format {
-        OutputFormat::Json => serde_json::to_string_pretty(queries).unwrap_or_default(),
+        OutputFormat::Json | OutputFormat::Sarif => {
+            serde_json::to_string_pretty(queries).unwrap_or_default()
+        }
         OutputFormat::Yaml => serde_yaml::to_string(queries).unwrap_or_default(),
         OutputFormat::Text => format_text_summary(queries, opts)
     }
@@ -49,7 +55,7 @@ pub fn format_queries_summary(queries: &[Query], opts: &OutputOptions) -> String
 /// Format full analysis result
 pub fn format_analysis_result(queries: &[Query], analysis: &str, opts: &OutputOptions) -> String {
     match opts.format {
-        OutputFormat::Json => {
+        OutputFormat::Json | OutputFormat::Sarif => {
             let result = AnalysisResult {
                 queries:  queries.to_vec(),
                 analysis: analysis.to_string()
@@ -170,4 +176,149 @@ fn format_text_summary(queries: &[Query], opts: &OutputOptions) -> String {
     }
 
     summary
+}
+
+/// Format static analysis report
+pub fn format_static_analysis(report: &AnalysisReport, opts: &OutputOptions) -> String {
+    match opts.format {
+        OutputFormat::Json => serde_json::to_string_pretty(report).unwrap_or_default(),
+        OutputFormat::Yaml => serde_yaml::to_string(report).unwrap_or_default(),
+        OutputFormat::Text => format_text_analysis(report, opts),
+        OutputFormat::Sarif => format_sarif(report)
+    }
+}
+
+fn format_sarif(report: &AnalysisReport) -> String {
+    let results: Vec<serde_json::Value> = report
+        .violations
+        .iter()
+        .map(|v| {
+            serde_json::json!({
+                "ruleId": v.rule_id,
+                "level": match v.severity {
+                    Severity::Error => "error",
+                    Severity::Warning => "warning",
+                    Severity::Info => "note",
+                },
+                "message": {
+                    "text": v.message
+                },
+                "locations": [{
+                    "physicalLocation": {
+                        "artifactLocation": {
+                            "uri": "queries.sql"
+                        },
+                        "region": {
+                            "startLine": v.query_index + 1
+                        }
+                    }
+                }]
+            })
+        })
+        .collect();
+
+    let sarif = serde_json::json!({
+        "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {
+                "driver": {
+                    "name": "sql-query-analyzer",
+                    "version": env!("CARGO_PKG_VERSION"),
+                    "informationUri": "https://github.com/example/sql-query-analyzer"
+                }
+            },
+            "results": results
+        }]
+    });
+
+    serde_json::to_string_pretty(&sarif).unwrap_or_default()
+}
+
+fn format_text_analysis(report: &AnalysisReport, opts: &OutputOptions) -> String {
+    let mut output = String::new();
+
+    // Header
+    let header = "=== Static Analysis ===\n";
+    if opts.colored {
+        output.push_str(&header.bold().to_string());
+    } else {
+        output.push_str(header);
+    }
+
+    if report.violations.is_empty() {
+        let msg = "✓ No issues found\n";
+        if opts.colored {
+            output.push_str(&msg.green().to_string());
+        } else {
+            output.push_str(msg);
+        }
+        return output;
+    }
+
+    // Summary
+    let summary = format!(
+        "Found {} error(s), {} warning(s), {} info\n\n",
+        report.error_count(),
+        report.warning_count(),
+        report.info_count()
+    );
+    output.push_str(&summary);
+
+    // Group violations by query
+    let mut current_query = usize::MAX;
+
+    for violation in &report.violations {
+        if violation.query_index != current_query {
+            current_query = violation.query_index;
+            let query_header = format!("Query #{}:\n", current_query + 1);
+            if opts.colored {
+                output.push_str(&query_header.cyan().to_string());
+            } else {
+                output.push_str(&query_header);
+            }
+        }
+
+        // Severity indicator
+        let severity_str = match violation.severity {
+            Severity::Error => {
+                if opts.colored {
+                    "ERROR".red().bold().to_string()
+                } else {
+                    "ERROR".to_string()
+                }
+            }
+            Severity::Warning => {
+                if opts.colored {
+                    "WARN".yellow().to_string()
+                } else {
+                    "WARN".to_string()
+                }
+            }
+            Severity::Info => {
+                if opts.colored {
+                    "INFO".blue().to_string()
+                } else {
+                    "INFO".to_string()
+                }
+            }
+        };
+
+        output.push_str(&format!(
+            "  [{:>5}] {}: {}\n",
+            severity_str, violation.rule_id, violation.message
+        ));
+
+        if let Some(suggestion) = &violation.suggestion {
+            let suggestion_line = format!("         → {}\n", suggestion);
+            if opts.colored {
+                output.push_str(&suggestion_line.dimmed().to_string());
+            } else {
+                output.push_str(&suggestion_line);
+            }
+        }
+    }
+
+    output.push('\n');
+    output
 }

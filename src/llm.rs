@@ -1,3 +1,38 @@
+//! LLM provider integrations for AI-powered query analysis.
+//!
+//! This module provides a unified interface for interacting with multiple LLM
+//! providers. It handles authentication, request formatting, response parsing,
+//! and automatic retry with exponential backoff.
+//!
+//! # Supported Providers
+//!
+//! | Provider | Endpoint | Authentication |
+//! |----------|----------|----------------|
+//! | OpenAI | `api.openai.com` | Bearer token |
+//! | Anthropic | `api.anthropic.com` | x-api-key header |
+//! | Ollama | Local (configurable) | None |
+//!
+//! # Retry Behavior
+//!
+//! The client automatically retries on transient errors:
+//! - Connection timeouts
+//! - Rate limiting (429)
+//! - Server errors (5xx)
+//!
+//! Retry delays use exponential backoff with configurable parameters.
+//!
+//! # Example
+//!
+//! ```ignore
+//! let provider = LlmProvider::OpenAI {
+//!     api_key: "sk-...".into(),
+//!     model: "gpt-4".into(),
+//! };
+//!
+//! let client = LlmClient::with_retry_config(provider, RetryConfig::default());
+//! let analysis = client.analyze(&schema_summary, &queries_summary).await?;
+//! ```
+
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -8,15 +43,36 @@ use crate::{
     error::{AppResult, http_error, llm_api_error}
 };
 
-/// LLM provider configuration
+/// LLM provider configuration with authentication credentials.
 #[derive(Debug, Clone)]
 pub enum LlmProvider {
-    OpenAI { api_key: String, model: String },
-    Anthropic { api_key: String, model: String },
-    Ollama { base_url: String, model: String }
+    /// OpenAI API (GPT-4, GPT-3.5, etc.)
+    OpenAI {
+        /// API key (sk-...)
+        api_key: String,
+        /// Model identifier (e.g., "gpt-4", "gpt-3.5-turbo")
+        model:   String
+    },
+    /// Anthropic API (Claude models)
+    Anthropic {
+        /// API key
+        api_key: String,
+        /// Model identifier (e.g., "claude-sonnet-4-20250514")
+        model:   String
+    },
+    /// Local Ollama instance
+    Ollama {
+        /// Base URL (e.g., "http://localhost:11434")
+        base_url: String,
+        /// Model name (e.g., "llama3.2", "codellama")
+        model:    String
+    }
 }
 
-/// LLM client for query analysis
+/// HTTP client for LLM API communication with retry support.
+///
+/// Handles provider-specific request formatting and response parsing.
+/// Automatically retries transient failures with exponential backoff.
 pub struct LlmClient {
     provider:     LlmProvider,
     client:       reqwest::Client,

@@ -1,6 +1,23 @@
+//! Error types and constructors for the SQL query analyzer.
+//!
+//! This module provides error construction functions that create properly
+//! formatted [`AppError`] instances with context-specific messages.
+//!
+//! # Error Categories
+//!
+//! - **File errors**: IO failures when reading schema/query files
+//! - **Parse errors**: SQL parsing failures with position information
+//! - **LLM errors**: API communication failures with retry support
+//! - **Config errors**: Invalid configuration files or values
+
 pub use masterror::{AppError, AppResult};
 
-/// Create file read error
+/// Create file read error with path context.
+///
+/// # Arguments
+///
+/// * `path` - The file path that failed to read
+/// * `source` - The underlying IO error
 pub fn file_read_error(path: &str, source: std::io::Error) -> AppError {
     AppError::internal(format!("Failed to read file '{}': {}", path, source))
 }
@@ -65,27 +82,27 @@ fn extract_position(message: &str) -> Option<SqlPosition> {
     let line_marker = "Line: ";
     let col_marker = ", Column ";
 
-    if let Some(line_start) = message.find(line_marker) {
-        let line_num_start = line_start + line_marker.len();
-        if let Some(col_start) = message[line_num_start..].find(col_marker) {
-            let line_str = &message[line_num_start..line_num_start + col_start];
-            let col_num_start = line_num_start + col_start + col_marker.len();
+    let line_start = message.find(line_marker)?;
+    let line_num_start = line_start + line_marker.len();
 
-            // Find end of column number
-            let col_end = message[col_num_start..]
-                .find(|c: char| !c.is_ascii_digit())
-                .unwrap_or(message.len() - col_num_start);
+    let rest = message.get(line_num_start..)?;
+    let col_start = rest.find(col_marker)?;
 
-            let col_str = &message[col_num_start..col_num_start + col_end];
+    let line_str = message.get(line_num_start..line_num_start + col_start)?;
+    let col_num_start = line_num_start + col_start + col_marker.len();
 
-            if let (Ok(line), Ok(column)) = (line_str.parse(), col_str.parse()) {
-                return Some(SqlPosition {
-                    line,
-                    column
-                });
-            }
-        }
-    }
+    let col_rest = message.get(col_num_start..)?;
+    let col_end = col_rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(col_rest.len());
 
-    None
+    let col_str = message.get(col_num_start..col_num_start + col_end)?;
+
+    let line = line_str.parse().ok()?;
+    let column = col_str.parse().ok()?;
+
+    Some(SqlPosition {
+        line,
+        column
+    })
 }

@@ -1,162 +1,7 @@
 use compact_str::CompactString;
 use indexmap::IndexSet;
 
-use super::types::WindowFunction;
-
-/// Context for extracting query metadata
-pub struct ExtractionContext<'a> {
-    pub tables:       &'a mut IndexSet<CompactString>,
-    pub where_cols:   &'a mut IndexSet<CompactString>,
-    pub join_cols:    &'a mut IndexSet<CompactString>,
-    pub group_cols:   &'a mut IndexSet<CompactString>,
-    pub having_cols:  &'a mut IndexSet<CompactString>,
-    pub window_funcs: &'a mut Vec<WindowFunction>,
-    pub has_union:    &'a mut bool,
-    pub has_distinct: &'a mut bool,
-    pub has_subquery: &'a mut bool
-}
-
-pub fn extract_from_set_expr(set_expr: &sqlparser::ast::SetExpr, ctx: &mut ExtractionContext<'_>) {
-    use sqlparser::ast::SetExpr;
-
-    match set_expr {
-        SetExpr::Select(select) => {
-            *ctx.has_distinct = select.distinct.is_some();
-
-            for item in &select.projection {
-                if let sqlparser::ast::SelectItem::UnnamedExpr(expr)
-                | sqlparser::ast::SelectItem::ExprWithAlias {
-                    expr, ..
-                } = item
-                {
-                    extract_window_functions(expr, ctx.window_funcs);
-                    if contains_subquery(expr) {
-                        *ctx.has_subquery = true;
-                    }
-                }
-            }
-
-            for table in &select.from {
-                extract_from_table_factor(&table.relation, ctx.tables);
-
-                for join in &table.joins {
-                    extract_from_table_factor(&join.relation, ctx.tables);
-
-                    match &join.join_operator {
-                        sqlparser::ast::JoinOperator::Inner(constraint)
-                        | sqlparser::ast::JoinOperator::LeftOuter(constraint)
-                        | sqlparser::ast::JoinOperator::RightOuter(constraint)
-                        | sqlparser::ast::JoinOperator::FullOuter(constraint) => {
-                            if let sqlparser::ast::JoinConstraint::On(expr) = constraint {
-                                extract_columns_from_expr(expr, ctx.join_cols);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-
-            if let Some(selection) = &select.selection {
-                extract_columns_from_expr(selection, ctx.where_cols);
-                if contains_subquery(selection) {
-                    *ctx.has_subquery = true;
-                }
-            }
-
-            if let sqlparser::ast::GroupByExpr::Expressions(exprs, _) = &select.group_by {
-                for expr in exprs {
-                    extract_columns_from_expr(expr, ctx.group_cols);
-                }
-            }
-
-            if let Some(having) = &select.having {
-                extract_columns_from_expr(having, ctx.having_cols);
-            }
-        }
-        SetExpr::SetOperation {
-            left,
-            right,
-            ..
-        } => {
-            *ctx.has_union = true;
-            extract_from_set_expr(left, ctx);
-            extract_from_set_expr(right, ctx);
-        }
-        SetExpr::Query(query) => {
-            if let Some(order_by) = &query.order_by
-                && let sqlparser::ast::OrderByKind::Expressions(exprs) = &order_by.kind
-            {
-                let mut order_cols = IndexSet::new();
-                for expr in exprs {
-                    extract_columns_from_expr(&expr.expr, &mut order_cols);
-                }
-            }
-            extract_from_set_expr(&query.body, ctx);
-        }
-        SetExpr::Values(_)
-        | SetExpr::Insert(_)
-        | SetExpr::Update(_)
-        | SetExpr::Table(_)
-        | SetExpr::Delete(_)
-        | SetExpr::Merge(_) => {}
-    }
-}
-
-pub fn extract_from_table_factor(
-    table_factor: &sqlparser::ast::TableFactor,
-    tables: &mut IndexSet<CompactString>
-) {
-    use sqlparser::ast::TableFactor;
-
-    match table_factor {
-        TableFactor::Table {
-            name, ..
-        } => {
-            tables.insert(name.to_string().into());
-        }
-        TableFactor::Derived {
-            subquery,
-            alias,
-            ..
-        } => {
-            if let Some(alias) = alias {
-                tables.insert(format!("(subquery) AS {}", alias.name.value).into());
-            }
-            let mut sub_where = IndexSet::new();
-            let mut sub_join = IndexSet::new();
-            let mut sub_group = IndexSet::new();
-            let mut sub_having = IndexSet::new();
-            let mut sub_windows = Vec::new();
-            let mut has_union = false;
-            let mut has_distinct = false;
-            let mut has_subquery = false;
-            let mut ctx = ExtractionContext {
-                tables,
-                where_cols: &mut sub_where,
-                join_cols: &mut sub_join,
-                group_cols: &mut sub_group,
-                having_cols: &mut sub_having,
-                window_funcs: &mut sub_windows,
-                has_union: &mut has_union,
-                has_distinct: &mut has_distinct,
-                has_subquery: &mut has_subquery
-            };
-            extract_from_set_expr(&subquery.body, &mut ctx);
-        }
-        TableFactor::TableFunction {
-            ..
-        } => {}
-        TableFactor::NestedJoin {
-            table_with_joins, ..
-        } => {
-            extract_from_table_factor(&table_with_joins.relation, tables);
-            for join in &table_with_joins.joins {
-                extract_from_table_factor(&join.relation, tables);
-            }
-        }
-        _ => {}
-    }
-}
+use crate::query::types::WindowFunction;
 
 pub fn extract_columns_from_expr(
     expr: &sqlparser::ast::Expr,
@@ -264,7 +109,7 @@ pub fn extract_columns_from_expr(
     }
 }
 
-fn extract_window_functions(expr: &sqlparser::ast::Expr, windows: &mut Vec<WindowFunction>) {
+pub fn extract_window_functions(expr: &sqlparser::ast::Expr, windows: &mut Vec<WindowFunction>) {
     use sqlparser::ast::Expr;
 
     match expr {
@@ -343,7 +188,7 @@ fn extract_window_functions(expr: &sqlparser::ast::Expr, windows: &mut Vec<Windo
     }
 }
 
-fn contains_subquery(expr: &sqlparser::ast::Expr) -> bool {
+pub fn contains_subquery(expr: &sqlparser::ast::Expr) -> bool {
     use sqlparser::ast::Expr;
 
     match expr {

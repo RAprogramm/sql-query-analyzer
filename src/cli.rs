@@ -19,7 +19,7 @@ pub enum Commands {
         #[arg(short, long)]
         schema: PathBuf,
 
-        /// Path to SQL queries file
+        /// Path to SQL queries file (use - for stdin)
         #[arg(short, long)]
         queries: PathBuf,
 
@@ -91,5 +91,6 @@ pub enum Dialect {
 pub enum Format {
     Text,
     Json,
-    Yaml
+    Yaml,
+    Sarif
 }

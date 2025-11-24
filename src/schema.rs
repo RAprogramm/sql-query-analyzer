@@ -1,37 +1,85 @@
+//! Database schema parsing and representation.
+//!
+//! This module parses SQL DDL statements (CREATE TABLE, CREATE INDEX) into a
+//! structured representation that can be used for schema-aware query analysis.
+//!
+//! # Supported Statements
+//!
+//! - `CREATE TABLE` with columns, types, constraints
+//! - `CREATE INDEX` with column lists and uniqueness
+//! - Primary key constraints (inline and table-level)
+//! - NOT NULL constraints
+//!
+//! # Example
+//!
+//! ```ignore
+//! let sql = r#"
+//!     CREATE TABLE users (
+//!         id INT PRIMARY KEY,
+//!         email VARCHAR(255) NOT NULL
+//!     );
+//!     CREATE INDEX idx_email ON users(email);
+//! "#;
+//!
+//! let schema = Schema::parse(sql)?;
+//!
+//! // Get table info
+//! if let Some(users) = schema.tables.get("users") {
+//!     println!("Columns: {:?}", users.columns);
+//!     println!("Indexes: {:?}", users.indexes);
+//! }
+//!
+//! // Generate summary for LLM
+//! let summary = schema.to_summary();
+//! ```
+
 use std::collections::BTreeMap;
 
 use sqlparser::{dialect::GenericDialect, parser::Parser};
 
 use crate::error::{AppResult, schema_parse_error};
 
-/// Represents a database table with its columns and indexes
+/// Complete information about a database table.
 #[derive(Debug, Clone)]
 pub struct TableInfo {
+    /// Table name
     pub name:    String,
+    /// Ordered list of columns
     pub columns: Vec<ColumnInfo>,
+    /// Indexes defined on this table
     pub indexes: Vec<IndexInfo>
 }
 
-/// Column information
+/// Column metadata extracted from CREATE TABLE.
 #[derive(Debug, Clone)]
 pub struct ColumnInfo {
+    /// Column name
     pub name:        String,
+    /// SQL data type (e.g., "INT", "VARCHAR(255)")
     pub data_type:   String,
+    /// Whether NULL values are allowed
     pub is_nullable: bool,
+    /// Whether this is a primary key column
     pub is_primary:  bool
 }
 
-/// Index information
+/// Index metadata extracted from CREATE INDEX or table constraints.
 #[derive(Debug, Clone)]
 pub struct IndexInfo {
+    /// Index name (may be empty for anonymous indexes)
     pub name:      String,
+    /// Ordered list of indexed columns
     pub columns:   Vec<String>,
+    /// Whether this is a unique index
     pub is_unique: bool
 }
 
-/// Parsed database schema
-#[derive(Debug, Default)]
+/// Parsed database schema containing all tables and their metadata.
+///
+/// Tables are stored in a `BTreeMap` for deterministic iteration order.
+#[derive(Debug, Default, Clone)]
 pub struct Schema {
+    /// Map of table name to table information
     pub tables: BTreeMap<String, TableInfo>
 }
 

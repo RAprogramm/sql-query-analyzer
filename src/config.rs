@@ -1,4 +1,47 @@
-use std::{env, fs, path::PathBuf};
+//! Configuration loading and management.
+//!
+//! Configuration is loaded from multiple sources with the following precedence
+//! (highest to lowest):
+//!
+//! 1. Command-line arguments
+//! 2. Environment variables
+//! 3. `.sql-analyzer.toml` in current directory
+//! 4. `~/.config/sql-analyzer/config.toml`
+//! 5. Default values
+//!
+//! # Configuration File Format
+//!
+//! ```toml
+//! [llm]
+//! provider = "ollama"          # openai, anthropic, ollama
+//! model = "llama3.2"
+//! api_key = "sk-..."           # or use LLM_API_KEY env var
+//! ollama_url = "http://localhost:11434"
+//!
+//! [retry]
+//! max_retries = 3
+//! initial_delay_ms = 1000
+//! max_delay_ms = 30000
+//! backoff_factor = 2.0
+//!
+//! [rules]
+//! disabled = ["STYLE001", "PERF011"]
+//!
+//! [rules.severity]
+//! PERF001 = "error"
+//! SCHEMA001 = "info"
+//! ```
+//!
+//! # Environment Variables
+//!
+//! | Variable | Description |
+//! |----------|-------------|
+//! | `LLM_API_KEY` | API key for OpenAI/Anthropic |
+//! | `LLM_PROVIDER` | Provider name |
+//! | `LLM_MODEL` | Model identifier |
+//! | `OLLAMA_URL` | Ollama base URL |
+
+use std::{collections::HashMap, env, fs, path::PathBuf};
 
 use serde::Deserialize;
 
@@ -10,7 +53,20 @@ pub struct Config {
     #[serde(default)]
     pub llm:   LlmConfig,
     #[serde(default)]
-    pub retry: RetryConfig
+    pub retry: RetryConfig,
+    #[serde(default)]
+    pub rules: RulesConfig
+}
+
+/// Rules configuration
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct RulesConfig {
+    /// Disabled rule IDs
+    #[serde(default)]
+    pub disabled: Vec<String>,
+    /// Severity overrides (rule_id -> severity)
+    #[serde(default)]
+    pub severity: HashMap<String, String>
 }
 
 /// LLM provider configuration

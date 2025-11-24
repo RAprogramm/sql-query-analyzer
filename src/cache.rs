@@ -1,3 +1,24 @@
+//! Query caching for improved performance.
+//!
+//! This module provides a thread-safe cache for parsed SQL queries to avoid
+//! re-parsing identical query strings. Uses a simple eviction strategy that
+//! clears half the cache when full.
+//!
+//! # Usage
+//!
+//! ```ignore
+//! use crate::cache::{get_cached, cache_queries};
+//!
+//! // Try to get from cache first
+//! let queries = if let Some(cached) = get_cached(&sql) {
+//!     cached
+//! } else {
+//!     let parsed = parse_queries(&sql, dialect)?;
+//!     cache_queries(&sql, parsed.clone());
+//!     parsed
+//! };
+//! ```
+
 use std::{
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
@@ -6,11 +27,14 @@ use std::{
 
 use crate::query::Query;
 
-/// Global query cache
+/// Global query cache with default capacity of 1000 entries.
 static QUERY_CACHE: LazyLock<RwLock<QueryCache>> =
     LazyLock::new(|| RwLock::new(QueryCache::new(1000)));
 
-/// LRU-like cache for parsed queries
+/// Thread-safe cache for parsed SQL queries.
+///
+/// Uses hash-based keys derived from the raw SQL string for fast lookups.
+/// Evicts half the cache when capacity is reached.
 pub struct QueryCache {
     cache:    HashMap<u64, Vec<Query>>,
     max_size: usize
