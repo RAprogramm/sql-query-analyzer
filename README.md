@@ -10,6 +10,24 @@
 
 A comprehensive SQL analysis tool that combines fast, deterministic static analysis with optional AI-powered insights. Identifies performance issues, style violations, and security vulnerabilities in your SQL queries.
 
+## Table of Contents
+
+- [Highlights](#highlights)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Rules](#rules)
+- [Configuration](#configuration)
+- [CLI Reference](#cli-reference)
+- [Example](#example)
+- [CI/CD Integration](#cicd-integration)
+- [LLM Providers](#llm-providers)
+- [Architecture](#architecture)
+- [Performance](#performance)
+- [Contributing](#contributing)
+- [Acknowledgements](#acknowledgements)
+- [Coverage](#coverage)
+- [License](#license)
+
 ## Highlights
 
 - **18 Built-in Rules** — Performance, style, and security checks run instantly without API calls
@@ -18,6 +36,8 @@ A comprehensive SQL analysis tool that combines fast, deterministic static analy
 - **Parallel Execution** — Rules execute concurrently using [rayon](https://github.com/rayon-rs/rayon)
 - **Optional LLM Analysis** — Deep semantic analysis via OpenAI, Anthropic, or local Ollama
 - **Configurable** — Disable rules, override severity levels, customize via TOML
+
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
 
 ## Installation
 
@@ -30,6 +50,8 @@ cargo install --path .
 ### Pre-built binaries
 
 Download from [Releases](https://github.com/RAprogramm/sql-query-analyzer/releases).
+
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
 
 ## Quick Start
 
@@ -47,6 +69,8 @@ echo "SELECT * FROM users" | sql-query-analyzer analyze -s schema.sql -q -
 export LLM_API_KEY="sk-..."
 sql-query-analyzer analyze -s schema.sql -q queries.sql --provider openai
 ```
+
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
 
 ## Rules
 
@@ -87,6 +111,8 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql --provider openai
 | `SCHEMA001` | Missing index on filter | Warning | WHERE/JOIN column lacks index |
 | `SCHEMA002` | Column not in schema | Warning | Referenced column doesn't exist |
 | `SCHEMA003` | Index suggestion | Info | ORDER BY column could benefit from index |
+
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
 
 ## Configuration
 
@@ -130,6 +156,8 @@ backoff_factor = 2.0
 | `LLM_MODEL` | Model identifier |
 | `OLLAMA_URL` | Ollama base URL |
 
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
+
 ## CLI Reference
 
 ```
@@ -159,6 +187,8 @@ sql-query-analyzer analyze [OPTIONS] -s <SCHEMA> -q <QUERIES>
 | `0` | Success, no issues or only informational |
 | `1` | Warnings found |
 | `2` | Errors found |
+
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
 
 ## Example
 
@@ -204,6 +234,8 @@ Query #2:
   [ INFO] SCHEMA003: ORDER BY column 'created_at' could benefit from index
          → CREATE INDEX idx_created_at ON table(created_at)
 ```
+
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
 
 ## CI/CD Integration
 
@@ -266,6 +298,8 @@ repos:
         files: \.sql$
 ```
 
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
+
 ## LLM Providers
 
 | Provider | Model Examples | Notes |
@@ -286,6 +320,8 @@ ollama pull llama3.2
 # Run analysis
 sql-query-analyzer analyze -s schema.sql -q queries.sql
 ```
+
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
 
 ## Architecture
 
@@ -322,6 +358,8 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql
          └────────────────────────┘
 ```
 
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
+
 ## Performance
 
 - **Parallel rule execution** via rayon
@@ -330,6 +368,8 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql
 - **Memory-efficient** string storage with CompactString
 
 Typical performance: ~1000 queries analyzed in <100ms (static analysis only).
+
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
 
 ## Contributing
 
@@ -351,11 +391,15 @@ cargo doc --open
 cargo fmt
 ```
 
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
+
 ## Acknowledgements
 
 The idea for this tool came from [Yegor Bugayenko](https://www.yegor256.com/):
 
 > It would be great to have a tool that takes two inputs: 1) the entire database schema in SQL, and 2) all SQL queries that my web app issues to the database during unit testing. The tool should use an LLM to analyze the queries and identify which ones are suboptimal, especially with respect to the existing indexes.
+
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
 
 ## Coverage
 
@@ -382,6 +426,10 @@ The top section represents the entire project. Proceeding with folders and final
 
 </details>
 
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
+
 ## License
 
 [MIT](LICENSE) © 2025
+
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
