@@ -1,0 +1,11 @@
+trailing_comma = "Never"
+brace_style = "SameLineWhere"
+struct_field_align_threshold = 20
+wrap_comments = true
+format_code_in_doc_comments = true
+struct_lit_single_line = false
+max_width = 99
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
+reorder_imports = true
+unstable_features = true

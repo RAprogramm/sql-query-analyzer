@@ -1,0 +1,103 @@
+name: 'SQL Query Analyzer'
+description: 'Analyze SQL queries for performance optimization using LLM'
+author: 'RAprogramm'
+
+branding:
+  icon: 'database'
+  color: 'blue'
+
+inputs:
+  schema:
+    description: 'Path to SQL schema file'
+    required: true
+  queries:
+    description: 'Path to SQL queries file'
+    required: true
+  provider:
+    description: 'LLM provider (ollama, open-ai, anthropic)'
+    required: false
+    default: 'anthropic'
+  api_key:
+    description: 'API key for LLM provider'
+    required: true
+  model:
+    description: 'Model name'
+    required: false
+    default: ''
+  post_comment:
+    description: 'Post analysis as PR comment'
+    required: false
+    default: 'false'
+  update_comment:
+    description: 'Update existing comment instead of creating new'
+    required: false
+    default: 'true'
+
+outputs:
+  analysis:
+    description: 'Analysis result from LLM'
+    value: ${{ steps.analyze.outputs.analysis }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+
+    - name: Build analyzer
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}
+        cargo build --release
+
+    - name: Run analysis
+      id: analyze
+      shell: bash
+      run: |
+        ARGS="analyze -s ${{ inputs.schema }} -q ${{ inputs.queries }}"
+        ARGS="$ARGS -p ${{ inputs.provider }}"
+        ARGS="$ARGS --api-key ${{ inputs.api_key }}"
+
+        if [ -n "${{ inputs.model }}" ]; then
+          ARGS="$ARGS -m ${{ inputs.model }}"
+        fi
+
+        OUTPUT=$(${{ github.action_path }}/target/release/sql_query_analyzer $ARGS)
+
+        echo "$OUTPUT"
+
+        echo "analysis<<EOF" >> $GITHUB_OUTPUT
+        echo "$OUTPUT" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Post PR comment
+      if: inputs.post_comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        MARKER="<!-- sql-query-analyzer-comment -->"
+        PR_NUMBER=${{ github.event.pull_request.number }}
+        COMMENT="${MARKER}
+        ## SQL Query Analysis
+
+        ${{ steps.analyze.outputs.analysis }}"
+
+        if [ "${{ inputs.update_comment }}" = "true" ]; then
+          EXISTING=$(gh api repos/${{ github.repository }}/issues/${PR_NUMBER}/comments \
+            --jq ".[] | select(.body | contains(\"${MARKER}\")) | .id" | head -1)
+
+          if [ -n "$EXISTING" ]; then
+            gh api repos/${{ github.repository }}/issues/comments/${EXISTING} \
+              -X PATCH -f body="$COMMENT"
+            echo "Updated existing comment"
+          else
+            gh pr comment $PR_NUMBER --body "$COMMENT"
+            echo "Created new comment"
+          fi
+        else
+          gh pr comment $PR_NUMBER --body "$COMMENT"
+          echo "Created new comment"
+        fi
