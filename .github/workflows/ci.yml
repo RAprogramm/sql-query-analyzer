@@ -46,20 +46,6 @@ jobs:
               - '**/*.yml'
               - '**/*.md'
 
-  diff-check:
-    name: PR Diff Check
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: RAprogramm/rust-prod-diff-checker@v1
-        with:
-          max_prod_units: '50'
-          max_weighted_score: '150'
-          post_comment: 'true'
-
   fmt:
     name: Format
     runs-on: ubuntu-latest
@@ -157,3 +143,125 @@ jobs:
         with:
           name: sql-query-analyzer
           path: target/release/sql_query_analyzer
+
+  # Release jobs - only on tag push
+  release-build:
+    name: Release Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    needs: [test, doc, audit, reuse]
+    if: |
+      startsWith(github.ref, 'refs/tags/v') &&
+      needs.test.result == 'success' &&
+      needs.doc.result == 'success' &&
+      (needs.audit.result == 'success' || needs.audit.result == 'skipped') &&
+      (needs.reuse.result == 'success' || needs.reuse.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            cross: false
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            archive: tar.gz
+            cross: true
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+            cross: false
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+            cross: false
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+            cross: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build with cross
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Build with cargo
+        if: ${{ !matrix.cross }}
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../sql-query-analyzer-${{ matrix.target }}.tar.gz sql_query_analyzer
+
+      - name: Package (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          Compress-Archive -Path sql_query_analyzer.exe -DestinationPath ../../../sql-query-analyzer-${{ matrix.target }}.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sql-query-analyzer-${{ matrix.target }}
+          path: sql-query-analyzer-${{ matrix.target }}.${{ matrix.archive }}
+
+  release:
+    name: Create Release
+    needs: [release-build]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: artifacts/**/*
+
+  publish:
+    name: Publish to crates.io
+    needs: [release-build]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Publish
+        run: |
+          output=$(cargo publish --token ${{ secrets.CRATES_IO_TOKEN }} --allow-dirty 2>&1) || {
+            if echo "$output" | grep -q "already exists"; then
+              echo "::notice::Version already published to crates.io"
+              exit 0
+            else
+              echo "$output"
+              exit 1
+            fi
+          }
