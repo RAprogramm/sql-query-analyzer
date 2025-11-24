@@ -5,6 +5,7 @@
 [![CI](https://github.com/RAprogramm/sql-query-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/RAprogramm/sql-query-analyzer/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/RAprogramm/sql-query-analyzer/graph/badge.svg?token=hKvq66JThf)](https://codecov.io/gh/RAprogramm/sql-query-analyzer)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Hits-of-Code](https://hitsofcode.com/github/RAprogramm/sql-query-analyzer?branch=main&exclude=Cargo.lock,.gitignore,CHANGELOG.md)](https://hitsofcode.com/github/RAprogramm/sql-query-analyzer/view?branch=main&exclude=Cargo.lock,.gitignore,CHANGELOG.md)
 [![REUSE status](https://api.reuse.software/badge/github.com/RAprogramm/sql-query-analyzer)](https://api.reuse.software/info/github.com/RAprogramm/sql-query-analyzer)
 
 **Static analysis and LLM-powered optimization for SQL queries.**
