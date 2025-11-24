@@ -1,5 +1,5 @@
 name: 'SQL Query Analyzer'
-description: 'Static analysis for SQL queries with 18 built-in rules. Detects performance issues, security vulnerabilities, and style violations.'
+description: 'Static analysis for SQL queries. Detects performance issues, security vulnerabilities, and style violations.'
 author: 'RAprogramm'
 
 branding:
