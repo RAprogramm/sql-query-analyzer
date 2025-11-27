@@ -42,24 +42,25 @@
 //!
 //! # Implementing Custom Rules
 //!
-//! ```ignore
-//! use crate::rules::{Rule, RuleInfo, Severity, RuleCategory, Violation};
-//! use crate::query::Query;
+//! ```
+//! use sql_query_analyzer::{
+//!     query::Query,
+//!     rules::{Rule, RuleCategory, RuleInfo, Severity, Violation}
+//! };
 //!
 //! pub struct MyRule;
 //!
 //! impl Rule for MyRule {
 //!     fn info(&self) -> RuleInfo {
 //!         RuleInfo {
-//!             id: "CUSTOM001",
-//!             name: "My custom rule",
+//!             id:       "CUSTOM001",
+//!             name:     "My custom rule",
 //!             severity: Severity::Warning,
-//!             category: RuleCategory::Performance,
+//!             category: RuleCategory::Performance
 //!         }
 //!     }
 //!
 //!     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-//!         // Implementation here
 //!         vec![]
 //!     }
 //! }
@@ -83,20 +84,35 @@ use crate::{config::RulesConfig, query::Query, schema::Schema};
 ///
 /// # Example
 ///
-/// ```ignore
-/// impl Rule for SelectStarRule {
+/// ```
+/// use sql_query_analyzer::{
+///     query::Query,
+///     rules::{Rule, RuleCategory, RuleInfo, Severity, Violation}
+/// };
+///
+/// struct LargeOffsetRule;
+///
+/// impl Rule for LargeOffsetRule {
 ///     fn info(&self) -> RuleInfo {
 ///         RuleInfo {
-///             id: "STYLE001",
-///             name: "Select star",
-///             severity: Severity::Info,
-///             category: RuleCategory::Style,
+///             id:       "PERF004",
+///             name:     "Large offset",
+///             severity: Severity::Warning,
+///             category: RuleCategory::Performance
 ///         }
 ///     }
 ///
 ///     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-///         if query.has_select_star {
-///             vec![/* violation */]
+///         if query.offset.unwrap_or(0) > 1000 {
+///             vec![Violation {
+///                 rule_id: "PERF004",
+///                 rule_name: "Large offset",
+///                 message: "Large OFFSET can cause performance issues".into(),
+///                 severity: Severity::Warning,
+///                 category: RuleCategory::Performance,
+///                 suggestion: Some("Use keyset pagination instead".into()),
+///                 query_index
+///             }]
 ///         } else {
 ///             vec![]
 ///         }
@@ -128,16 +144,23 @@ pub trait Rule: Send + Sync {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
+/// use sql_query_analyzer::{
+///     config::RulesConfig,
+///     query::{SqlDialect, parse_queries},
+///     rules::RuleRunner
+/// };
+///
 /// let config = RulesConfig {
 ///     disabled: vec!["STYLE001".into()],
 ///     ..Default::default()
 /// };
 ///
-/// let runner = RuleRunner::with_schema_and_config(schema, config);
+/// let runner = RuleRunner::with_config(config);
+/// let queries = parse_queries("SELECT id FROM users", SqlDialect::Generic).unwrap();
 /// let report = runner.analyze(&queries);
 ///
-/// println!("Found {} errors", report.error_count());
+/// assert_eq!(report.error_count(), 0);
 /// ```
 pub struct RuleRunner {
     rules:          Vec<Box<dyn Rule>>,

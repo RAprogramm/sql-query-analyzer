@@ -12,7 +12,9 @@
 //!
 //! # Example
 //!
-//! ```ignore
+//! ```
+//! use sql_query_analyzer::schema::Schema;
+//!
 //! let sql = r#"
 //!     CREATE TABLE users (
 //!         id INT PRIMARY KEY,
@@ -21,16 +23,14 @@
 //!     CREATE INDEX idx_email ON users(email);
 //! "#;
 //!
-//! let schema = Schema::parse(sql)?;
+//! let schema = Schema::parse(sql).unwrap();
 //!
-//! // Get table info
-//! if let Some(users) = schema.tables.get("users") {
-//!     println!("Columns: {:?}", users.columns);
-//!     println!("Indexes: {:?}", users.indexes);
-//! }
+//! let users = schema.tables.get("users").unwrap();
+//! assert_eq!(users.columns.len(), 2);
+//! assert_eq!(users.indexes.len(), 1);
 //!
-//! // Generate summary for LLM
 //! let summary = schema.to_summary();
+//! assert!(summary.contains("users"));
 //! ```
 
 use std::collections::BTreeMap;

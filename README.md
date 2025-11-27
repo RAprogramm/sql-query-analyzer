@@ -24,6 +24,7 @@ A comprehensive SQL analysis tool that combines fast, deterministic static analy
 - [CI/CD Integration](#cicd-integration)
 - [LLM Providers](#llm-providers)
 - [Architecture](#architecture)
+- [CI Pipeline](#ci-pipeline)
 - [Performance](#performance)
 - [Contributing](#contributing)
 - [Acknowledgements](#acknowledgements)
@@ -446,6 +447,234 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql
          │  Text/JSON/YAML/SARIF  │
          └────────────────────────┘
 ```
+
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
+
+## CI Pipeline
+
+This project uses a comprehensive CI pipeline with 16 jobs organized into quality gates.
+
+### Pipeline Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              CI PIPELINE                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────┐                                                                │
+│  │ changes │ ─── Detects modified files and triggers relevant jobs          │
+│  └────┬────┘                                                                │
+│       │                                                                     │
+│       ├──────────────────────────────────────────────────────────────────┐  │
+│       │                                                                  │  │
+│       ▼                                                                  │  │
+│  ┌─────────┐                                                             │  │
+│  │   fmt   │ ─── cargo +nightly fmt --check                              │  │
+│  └────┬────┘                                                             │  │
+│       │                                                                  │  │
+│       ├─────────────────────┬─────────────────────┐                      │  │
+│       │                     │                     │                      │  │
+│       ▼                     ▼                     ▼                      │  │
+│  ┌─────────┐           ┌─────────┐           ┌─────────┐                 │  │
+│  │ clippy  │           │  msrv   │           │ machete │                 │  │
+│  │         │           │ (1.90)  │           │         │                 │  │
+│  └────┬────┘           └────┬────┘           └────┬────┘                 │  │
+│       │                     │                     │                      │  │
+│       ├──────────┬──────────┼─────────────────────┤                      │  │
+│       │          │          │                     │                      │  │
+│       ▼          ▼          │                     │                      │  │
+│  ┌─────────┐ ┌─────────┐    │                     │                      │  │
+│  │  test   │ │   doc   │    │                     │                      │  │
+│  │+coverage│ │         │    │                     │      ┌─────────┐     │  │
+│  └────┬────┘ └────┬────┘    │                     │      │  audit  │◄────┘  │
+│       │          │          │                     │      └────┬────┘        │
+│       ▼          │          │                     │           │             │
+│  ┌─────────┐     │          │                     │      ┌────▼────┐        │
+│  │ doctest │     │          │                     │      │  deny   │        │
+│  └────┬────┘     │          │                     │      └────┬────┘        │
+│       │          │          │                     │           │             │
+│       ▼          │          │                     │      ┌────▼────┐        │
+│  ┌─────────┐     │          │                     │      │  reuse  │        │
+│  │ semver  │     │          │                     │      └────┬────┘        │
+│  │(PR only)│     │          │                     │           │             │
+│  └────┬────┘     │          │                     │           │             │
+│       │          │          │                     │           │             │
+│       └──────────┴──────────┴─────────────────────┴───────────┘             │
+│                                    │                                        │
+│                                    ▼                                        │
+│                             ┌───────────┐                                   │
+│                             │   build   │                                   │
+│                             └─────┬─────┘                                   │
+│                                   │                                         │
+│                                   ▼                                         │
+│                            ┌───────────┐                                    │
+│                            │ changelog │ (main branch only)                 │
+│                            └───────────┘                                    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Job Dependency Graph
+
+```
+                    ┌─────────┐
+                    │ changes │
+                    └────┬────┘
+                         │
+         ┌───────────────┼───────────────┬───────────────┐
+         │               │               │               │
+         ▼               ▼               ▼               ▼
+    ┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐
+    │   fmt   │     │  audit  │     │  deny   │     │  reuse  │
+    └────┬────┘     └────┬────┘     └────┬────┘     └────┬────┘
+         │               │               │               │
+    ┌────┴────┐          │               │               │
+    │         │          │               │               │
+    ▼         ▼          │               │               │
+┌───────┐ ┌───────┐      │               │               │
+│clippy │ │ msrv  │      │               │               │
+└───┬───┘ └───┬───┘      │               │               │
+    │         │          │               │               │
+    │    ┌────┘          │               │               │
+    │    │               │               │               │
+    ▼    │               │               │               │
+┌───────┐│               │               │               │
+│machete│◄───────────────┤               │               │
+└───┬───┘                │               │               │
+    │                    │               │               │
+    ├────────────────────┤               │               │
+    │                    │               │               │
+    ▼                    │               │               │
+┌────────┐               │               │               │
+│  test  │               │               │               │
+│  doc   │               │               │               │
+│doctest │               │               │               │
+│ semver │               │               │               │
+└───┬────┘               │               │               │
+    │                    │               │               │
+    └────────────────────┴───────────────┴───────────────┘
+                         │
+                         ▼
+                    ┌─────────┐
+                    │  build  │
+                    └────┬────┘
+                         │
+                         ▼
+                   ┌───────────┐
+                   │ changelog │
+                   └───────────┘
+```
+
+### Quality Gates
+
+| Job | Trigger | Tool | Description |
+|-----|---------|------|-------------|
+| **fmt** | `src/**`, `tests/**`, `Cargo.*` | `cargo +nightly fmt` | Code formatting verification |
+| **clippy** | `src/**`, `tests/**`, `Cargo.*` | `cargo clippy` | Static analysis with `-D warnings` |
+| **test** | `src/**`, `tests/**`, `Cargo.*` | `cargo-nextest` + `cargo-llvm-cov` | Tests with coverage upload to Codecov |
+| **doc** | `src/**`, `tests/**`, `Cargo.*` | `cargo doc` | Documentation with `-D warnings` |
+| **doctest** | `src/**`, `tests/**`, `Cargo.*` | `cargo test --doc` | Documentation examples verification |
+| **audit** | `Cargo.toml`, `Cargo.lock` | `cargo-audit` | Security vulnerability scanning (RustSec) |
+| **deny** | `Cargo.toml`, `Cargo.lock` | `cargo-deny` | License and dependency policy |
+| **msrv** | `src/**`, `tests/**`, `Cargo.*` | `rustc 1.90` | MSRV compatibility check |
+| **machete** | `Cargo.toml`, `Cargo.lock` | `cargo-machete` | Unused dependency detection |
+| **semver** | Pull requests only | `cargo-semver-checks` | Public API compatibility |
+| **reuse** | `LICENSES/**`, `**/*.rs`, `**/*.toml` | `reuse lint` | SPDX license compliance |
+
+### Change Detection
+
+The pipeline uses smart change detection to skip unnecessary jobs:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    Change Detection Matrix                    │
+├────────────────────┬─────────────────────────────────────────┤
+│ Filter             │ Paths                                   │
+├────────────────────┼─────────────────────────────────────────┤
+│ rust               │ src/**, tests/**, Cargo.toml,           │
+│                    │ Cargo.lock, .rustfmt.toml               │
+├────────────────────┼─────────────────────────────────────────┤
+│ deps               │ Cargo.toml, Cargo.lock                  │
+├────────────────────┼─────────────────────────────────────────┤
+│ reuse              │ LICENSES/**, .reuse/**, **/*.rs,        │
+│                    │ **/*.toml, **/*.yml, **/*.md            │
+└────────────────────┴─────────────────────────────────────────┘
+```
+
+### Dependency Policy
+
+The `deny.toml` configuration enforces:
+
+| Policy | Configuration |
+|--------|---------------|
+| **Allowed Licenses** | MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, CC0-1.0, Unicode-3.0, Unicode-DFS-2016, BSL-1.0, MPL-2.0 |
+| **Banned Crates** | `openssl`, `openssl-sys` (use `rustls` instead) |
+| **Registry** | crates.io only (no unknown registries or git sources) |
+| **Duplicates** | Warn on multiple versions of the same crate |
+| **Wildcards** | Denied in version requirements |
+
+### Release Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           RELEASE PIPELINE                                   │
+│                         (triggered by v* tags)                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                         Quality Gates                                │    │
+│  │    test + doc + audit + deny + reuse + msrv + machete + doctest     │    │
+│  └──────────────────────────────┬──────────────────────────────────────┘    │
+│                                 │                                           │
+│                                 ▼                                           │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                       release-build (matrix)                         │    │
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐    │    │
+│  │  │ linux-gnu   │ │ linux-musl  │ │ linux-arm64 │ │ macos-x64   │    │    │
+│  │  │   x86_64    │ │   x86_64    │ │   aarch64   │ │   x86_64    │    │    │
+│  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘    │    │
+│  │  ┌─────────────┐ ┌─────────────┐                                    │    │
+│  │  │ macos-arm64 │ │ windows-x64 │                                    │    │
+│  │  │   aarch64   │ │    msvc     │                                    │    │
+│  │  └─────────────┘ └─────────────┘                                    │    │
+│  └──────────────────────────────┬──────────────────────────────────────┘    │
+│                                 │                                           │
+│                    ┌────────────┴────────────┐                              │
+│                    │                         │                              │
+│                    ▼                         ▼                              │
+│             ┌───────────┐             ┌───────────┐                         │
+│             │  release  │             │  publish  │                         │
+│             │ (GitHub)  │             │(crates.io)│                         │
+│             └───────────┘             └───────────┘                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Supported Targets
+
+| Target | OS | Architecture | Build Method |
+|--------|-----|--------------|--------------|
+| `x86_64-unknown-linux-gnu` | Linux | x86_64 | Native |
+| `x86_64-unknown-linux-musl` | Linux (static) | x86_64 | Cross |
+| `aarch64-unknown-linux-gnu` | Linux | ARM64 | Cross |
+| `x86_64-apple-darwin` | macOS | x86_64 | Native |
+| `aarch64-apple-darwin` | macOS | ARM64 | Native |
+| `x86_64-pc-windows-msvc` | Windows | x86_64 | Native |
+
+### Caching Strategy
+
+All jobs utilize `Swatinem/rust-cache@v2` with job-specific cache keys:
+
+| Job | Cache Key |
+|-----|-----------|
+| **clippy** | Default |
+| **test** | Default |
+| **doc** | Default |
+| **msrv** | `msrv` |
+| **machete** | `machete` |
+| **doctest** | `doctest` |
+| **semver** | `semver` |
+| **release-build** | `release-{target}` |
 
 <div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
 

@@ -23,14 +23,18 @@
 //!
 //! # Example
 //!
-//! ```ignore
-//! let provider = LlmProvider::OpenAI {
-//!     api_key: "sk-...".into(),
-//!     model: "gpt-4".into(),
+//! ```
+//! use sql_query_analyzer::{
+//!     config::RetryConfig,
+//!     llm::{LlmClient, LlmProvider}
+//! };
+//!
+//! let provider = LlmProvider::Ollama {
+//!     base_url: "http://localhost:11434".into(),
+//!     model:    "llama3.2".into()
 //! };
 //!
 //! let client = LlmClient::with_retry_config(provider, RetryConfig::default());
-//! let analysis = client.analyze(&schema_summary, &queries_summary).await?;
 //! ```
 
 use std::time::Duration;

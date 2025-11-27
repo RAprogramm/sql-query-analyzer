@@ -4,19 +4,25 @@
 //! re-parsing identical query strings. Uses a simple eviction strategy that
 //! clears half the cache when full.
 //!
-//! # Usage
+//! # Example
 //!
-//! ```ignore
-//! use crate::cache::{get_cached, cache_queries};
+//! ```
+//! use sql_query_analyzer::{
+//!     cache::{cache_queries, get_cached},
+//!     query::{SqlDialect, parse_queries}
+//! };
 //!
-//! // Try to get from cache first
-//! let queries = if let Some(cached) = get_cached(&sql) {
+//! let sql = "SELECT id FROM users";
+//!
+//! let queries = if let Some(cached) = get_cached(sql) {
 //!     cached
 //! } else {
-//!     let parsed = parse_queries(&sql, dialect)?;
-//!     cache_queries(&sql, parsed.clone());
+//!     let parsed = parse_queries(sql, SqlDialect::Generic).unwrap();
+//!     cache_queries(sql, parsed.clone());
 //!     parsed
 //! };
+//!
+//! assert_eq!(queries.len(), 1);
 //! ```
 
 use std::{
