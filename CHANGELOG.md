@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### CI/CD
+
+- Fix deny licenses and remove unused dependencies ([d639d9e](https://github.com/RAprogramm/sql-query-analyzer/commit/d639d9eced635a3c2ce17fe459e8051275544274))
+- Add comprehensive quality gates and fix doctests ([f19dc9d](https://github.com/RAprogramm/sql-query-analyzer/commit/f19dc9d2bdbbb7e76adffd5816d4d999cd5f2150))
+- Bump the github-actions group with 5 updates ([55f6edb](https://github.com/RAprogramm/sql-query-analyzer/commit/55f6edba22258b4e3b044ab50acb09af74f28bf4))
+- Add dependabot configuration ([3fa8726](https://github.com/RAprogramm/sql-query-analyzer/commit/3fa87264595d6cc68dbe89f05b06a9b493f47a78))
+- Add PR size check with 200 lines limit ([7afb7ac](https://github.com/RAprogramm/sql-query-analyzer/commit/7afb7acd2df2c157dd952b29fbee2d73e55dbd2a))
+- Add PR size analysis with 200 lines limit ([da5d368](https://github.com/RAprogramm/sql-query-analyzer/commit/da5d368f88cd28074234844e552a4c640c4948c3))
+
+### Documentation
+
+- Add required permissions to GitHub Action example ([0ddc595](https://github.com/RAprogramm/sql-query-analyzer/commit/0ddc59516d1aa7118d2036bbc02ec1d622eb6f7b))
+- Add static analysis example without LLM ([50ecb6d](https://github.com/RAprogramm/sql-query-analyzer/commit/50ecb6d8d409c0d653c007fa0c998f7be057b978))
+- Update README with GitHub Action usage ([1865165](https://github.com/RAprogramm/sql-query-analyzer/commit/18651656ca2779ea8205becd49332cc8290108a4))
+- Add contributing guidelines with PR size limits ([16f6e7f](https://github.com/RAprogramm/sql-query-analyzer/commit/16f6e7f3c364ccfbe75d2da18c1f304bff702030))
+- Add REUSE compliance badge ([b7f838a](https://github.com/RAprogramm/sql-query-analyzer/commit/b7f838a3d2945352495cc17429eddfa92edb9e3f))
+- Update changelog [skip ci] ([8160321](https://github.com/RAprogramm/sql-query-analyzer/commit/8160321282ba46a04e7f8b810e85621a92d6f3da))
+
 ## [0.1.1] - 2025-11-24
 
 ### CI/CD
@@ -47,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Use rustls instead of openssl for cross-compilation ([2bdf030](https://github.com/RAprogramm/sql-query-analyzer/commit/2bdf03097c563bce1c7b70eb613f6d58bc52b0c2))
 
+[Unreleased]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.1.1...HEAD
 [0.1.1]: https://github.com/RAprogramm/sql-query-analyzer/compare/v1...v0.1.1
 [1]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.1.0...v1
 [0.1.0]: https://github.com/RAprogramm/sql-query-analyzer/releases/tag/v0.1.0
