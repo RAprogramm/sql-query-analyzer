@@ -30,6 +30,7 @@ allow = [
     "Unicode-DFS-2016",
     "BSL-1.0",
     "MPL-2.0",
+    "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.93
 

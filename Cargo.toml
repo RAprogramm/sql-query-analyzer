@@ -36,11 +36,8 @@ smallvec = { version = "1.15", features = ["serde"] }
 indexmap = { version = "2.12", features = ["serde"] }
 colored = "3"
 indicatif = "0.18"
-tokio-stream = "0.1"
-governor = "0.10"
 compact_str = { version = "0.9", features = ["serde"] }
 rayon = "1.11"
-bumpalo = { version = "3.19", features = ["collections"] }
 
 [profile.release]
 lto = true
