@@ -33,7 +33,7 @@ A comprehensive SQL analysis tool that combines fast, deterministic static analy
 
 ## Highlights
 
-- **18 Built-in Rules** — Performance, style, and security checks run instantly without API calls
+- **19 Built-in Rules** — Performance, style, and security checks run instantly without API calls
 - **Schema-Aware Analysis** — Validates queries against your database schema, suggests missing indexes
 - **Multiple Output Formats** — Text, JSON, YAML, and SARIF for CI/CD integration
 - **Parallel Execution** — Rules execute concurrently using [rayon](https://github.com/rayon-rs/rayon)
@@ -106,6 +106,7 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql --provider openai
 |----|------|----------|-------------|
 | `SEC001` | Missing WHERE in UPDATE | Error | Potentially dangerous bulk update |
 | `SEC002` | Missing WHERE in DELETE | Error | Potentially dangerous bulk delete |
+| `SEC003` | TRUNCATE detected | Error | Instant data deletion without logging |
 
 ### Schema-Aware Rules
 
@@ -311,7 +312,7 @@ For fast CI checks without external API calls:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-This runs all 18 built-in rules instantly without requiring any API keys.
+This runs all 19 built-in rules instantly without requiring any API keys.
 
 #### Advanced Usage
 
@@ -431,7 +432,7 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql
                       ▼
          ┌────────────────────────┐
          │    Static Analysis     │
-         │  (18 rules, parallel)  │
+         │  (19 rules, parallel)  │
          └────────────┬───────────┘
                       │
                       ▼

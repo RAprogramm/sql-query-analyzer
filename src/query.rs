@@ -84,6 +84,15 @@ fn parse_statement(stmt: sqlparser::ast::Statement) -> AppResult<Query> {
             }
             Ok(q)
         }
+        Statement::Truncate {
+            table_names, ..
+        } => {
+            let mut q = Query::new(raw, QueryType::Truncate);
+            for table in table_names {
+                q.tables.push(table.name.to_string().into());
+            }
+            Ok(q)
+        }
         _ => Ok(Query::new(raw, QueryType::Other))
     }
 }
