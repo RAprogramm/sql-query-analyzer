@@ -47,6 +47,9 @@ jobs:
   qual:
     needs: [detect, fmt, clippy]
     if: always() && (needs.fmt.result == 'success' || needs.fmt.result == 'skipped') && (needs.clippy.result == 'success' || needs.clippy.result == 'skipped')
+    permissions:
+      contents: read
+      pull-requests: write
     uses: ./.github/workflows/_qual.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
