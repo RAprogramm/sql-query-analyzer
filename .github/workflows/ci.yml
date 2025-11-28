@@ -180,6 +180,7 @@ jobs:
   # Check if release should proceed
   should-release:
     needs: tag
+    if: always() && needs.tag.result == 'success'
     runs-on: ubuntu-latest
     outputs:
       release: ${{ steps.check.outputs.release }}
