@@ -1,9 +1,11 @@
+# SPDX-FileCopyrightText: 2025 RAprogramm
+# SPDX-License-Identifier: MIT
+
 name: CI
 
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
     branches: [main]
 
@@ -16,444 +18,189 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
-  changes:
-    name: Detect Changes
-    runs-on: ubuntu-latest
-    outputs:
-      rust: ${{ steps.filter.outputs.rust }}
-      deps: ${{ steps.filter.outputs.deps }}
-      reuse: ${{ steps.filter.outputs.reuse }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            rust:
-              - 'src/**'
-              - 'tests/**'
-              - 'Cargo.toml'
-              - 'Cargo.lock'
-              - '.rustfmt.toml'
-            deps:
-              - 'Cargo.toml'
-              - 'Cargo.lock'
-            reuse:
-              - 'LICENSES/**'
-              - '.reuse/**'
-              - '**/*.rs'
-              - '**/*.toml'
-              - '**/*.yml'
-              - '**/*.md'
-
+  # Stage 1: PR size check (blocks everything on failure)
   pr-size:
     name: PR Size Check
     runs-on: ubuntu-latest
-    needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.rust == 'true'
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - uses: RAprogramm/rust-prod-diff-checker@v1
         with:
-          max-lines: 200
-          format: comment
-          post-comment: true
+          max_prod_lines: '200'
+          output_format: github
+          post_comment: 'true'
+          fail_on_exceed: 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Stage 2: Detect changes
+  detect:
+    needs: pr-size
+    if: always() && (needs.pr-size.result == 'success' || needs.pr-size.result == 'skipped')
+    uses: ./.github/workflows/_detect.yml
+
+  # Stage 3: All checks (parallel)
   fmt:
-    name: Format
-    runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.rust == 'true' || startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt
-      - run: cargo +nightly fmt --all -- --check
+    needs: detect
+    if: needs.detect.outputs.rust == 'true'
+    uses: ./.github/workflows/_fmt.yml
+    with:
+      rust_changed: ${{ needs.detect.outputs.rust }}
 
   clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.rust == 'true' || startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+    needs: detect
+    if: needs.detect.outputs.rust == 'true'
+    uses: ./.github/workflows/_clippy.yml
+    with:
+      rust_changed: ${{ needs.detect.outputs.rust }}
 
   qual:
-    name: Quality Check
-    runs-on: ubuntu-latest
-    needs: [changes, fmt]
-    if: |
-      always() &&
-      (needs.changes.outputs.rust == 'true' || startsWith(github.ref, 'refs/tags/v')) &&
-      (needs.fmt.result == 'success' || needs.fmt.result == 'skipped')
-    steps:
-      - uses: actions/checkout@v6
-      - uses: RAprogramm/cargo-quality@v0
-        with:
-          path: src/
-          fail_on_issues: 'true'
-          post_comment: ${{ github.event_name == 'pull_request' }}
+    needs: detect
+    if: needs.detect.outputs.rust == 'true'
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/_qual.yml
+    with:
+      rust_changed: ${{ needs.detect.outputs.rust }}
 
   test:
-    name: Test
-    runs-on: ubuntu-latest
-    needs: [changes, fmt, clippy]
-    if: |
-      always() &&
-      (needs.changes.outputs.rust == 'true' || startsWith(github.ref, 'refs/tags/v')) &&
-      (needs.fmt.result == 'success' || needs.fmt.result == 'skipped') &&
-      (needs.clippy.result == 'success' || needs.clippy.result == 'skipped')
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@cargo-llvm-cov
-      - uses: taiki-e/install-action@nextest
-      - name: Run tests with coverage
-        run: cargo llvm-cov nextest --all-features --lcov --output-path lcov.info
-      - name: Generate JUnit report
-        run: cargo nextest run --all-features --profile ci
-        continue-on-error: true
-      - name: Upload coverage to Codecov
-        if: github.event_name != 'pull_request'
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: lcov.info
-          fail_ci_if_error: false
-      - name: Upload test results to Codecov
-        if: github.event_name != 'pull_request' && !cancelled()
-        uses: codecov/test-results-action@v1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: target/nextest/ci/results.junit.xml
+    needs: detect
+    if: needs.detect.outputs.rust == 'true'
+    uses: ./.github/workflows/_test.yml
+    with:
+      rust_changed: ${{ needs.detect.outputs.rust }}
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   doc:
-    name: Documentation
-    runs-on: ubuntu-latest
-    needs: [changes, fmt, clippy]
-    if: |
-      always() &&
-      (needs.changes.outputs.rust == 'true' || startsWith(github.ref, 'refs/tags/v')) &&
-      (needs.fmt.result == 'success' || needs.fmt.result == 'skipped') &&
-      (needs.clippy.result == 'success' || needs.clippy.result == 'skipped')
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo doc --no-deps --all-features
-        env:
-          RUSTDOCFLAGS: -D warnings
-
-  audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.deps == 'true' || startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - uses: actions/checkout@v6
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  deny:
-    name: Dependency Check
-    runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.deps == 'true' || startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          command: check
-          arguments: --all-features
-
-  msrv:
-    name: MSRV (1.90)
-    runs-on: ubuntu-latest
-    needs: [changes, fmt]
-    if: |
-      always() &&
-      (needs.changes.outputs.rust == 'true' || startsWith(github.ref, 'refs/tags/v')) &&
-      (needs.fmt.result == 'success' || needs.fmt.result == 'skipped')
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.90.0
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: msrv
-      - name: Check MSRV compatibility
-        run: cargo check --all-features --all-targets
-
-  semver:
-    name: Semver Check
-    runs-on: ubuntu-latest
-    needs: [changes, fmt, clippy]
-    if: |
-      always() &&
-      github.event_name == 'pull_request' &&
-      needs.changes.outputs.rust == 'true' &&
-      (needs.fmt.result == 'success' || needs.fmt.result == 'skipped') &&
-      (needs.clippy.result == 'success' || needs.clippy.result == 'skipped')
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: semver
-      - uses: taiki-e/install-action@cargo-semver-checks
-      - name: Check semver compatibility
-        run: cargo semver-checks check-release --default-features
-
-  machete:
-    name: Unused Dependencies
-    runs-on: ubuntu-latest
-    needs: [changes, fmt]
-    if: |
-      always() &&
-      (needs.changes.outputs.deps == 'true' || startsWith(github.ref, 'refs/tags/v')) &&
-      (needs.fmt.result == 'success' || needs.fmt.result == 'skipped')
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: machete
-      - uses: taiki-e/install-action@cargo-machete
-      - name: Check for unused dependencies
-        run: cargo machete
+    needs: detect
+    if: needs.detect.outputs.rust == 'true'
+    uses: ./.github/workflows/_doc.yml
+    with:
+      rust_changed: ${{ needs.detect.outputs.rust }}
 
   doctest:
-    name: Doctests
-    runs-on: ubuntu-latest
-    needs: [changes, fmt, clippy]
-    if: |
-      always() &&
-      (needs.changes.outputs.rust == 'true' || startsWith(github.ref, 'refs/tags/v')) &&
-      (needs.fmt.result == 'success' || needs.fmt.result == 'skipped') &&
-      (needs.clippy.result == 'success' || needs.clippy.result == 'skipped')
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: doctest
-      - name: Run doctests
-        run: cargo test --doc --all-features
+    needs: detect
+    if: needs.detect.outputs.rust == 'true'
+    uses: ./.github/workflows/_doctest.yml
+    with:
+      rust_changed: ${{ needs.detect.outputs.rust }}
+
+  audit:
+    needs: detect
+    if: needs.detect.outputs.deps == 'true'
+    uses: ./.github/workflows/_audit.yml
+    with:
+      deps_changed: ${{ needs.detect.outputs.deps }}
+
+  deny:
+    needs: detect
+    if: needs.detect.outputs.deps == 'true'
+    uses: ./.github/workflows/_deny.yml
+    with:
+      deps_changed: ${{ needs.detect.outputs.deps }}
 
   reuse:
-    name: REUSE Compliance
-    runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.reuse == 'true' || startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - uses: actions/checkout@v6
-      - uses: fsfe/reuse-action@v6
+    needs: detect
+    if: needs.detect.outputs.reuse == 'true'
+    uses: ./.github/workflows/_reuse.yml
+    with:
+      reuse_changed: ${{ needs.detect.outputs.reuse }}
 
+  msrv:
+    needs: detect
+    if: needs.detect.outputs.rust == 'true'
+    uses: ./.github/workflows/_msrv.yml
+    with:
+      rust_changed: ${{ needs.detect.outputs.rust }}
+
+  semver:
+    needs: detect
+    if: github.event_name == 'pull_request' && needs.detect.outputs.rust == 'true'
+    uses: ./.github/workflows/_semver.yml
+    with:
+      rust_changed: ${{ needs.detect.outputs.rust }}
+
+  machete:
+    needs: detect
+    if: needs.detect.outputs.deps == 'true'
+    uses: ./.github/workflows/_machete.yml
+    with:
+      deps_changed: ${{ needs.detect.outputs.deps }}
+
+  # Stage 4: Build (after all checks pass)
   build:
-    name: Build Release
-    runs-on: ubuntu-latest
-    needs: [changes, test, doc, audit, deny, reuse, msrv, machete, doctest, qual]
+    needs: [detect, fmt, clippy, qual, test, doc, doctest, audit, deny, reuse, msrv, machete]
     if: |
       always() &&
-      (needs.changes.outputs.rust == 'true' || startsWith(github.ref, 'refs/tags/v')) &&
+      needs.detect.outputs.rust == 'true' &&
+      (needs.fmt.result == 'success' || needs.fmt.result == 'skipped') &&
+      (needs.clippy.result == 'success' || needs.clippy.result == 'skipped') &&
+      (needs.qual.result == 'success' || needs.qual.result == 'skipped') &&
       (needs.test.result == 'success' || needs.test.result == 'skipped') &&
       (needs.doc.result == 'success' || needs.doc.result == 'skipped') &&
+      (needs.doctest.result == 'success' || needs.doctest.result == 'skipped') &&
       (needs.audit.result == 'success' || needs.audit.result == 'skipped') &&
       (needs.deny.result == 'success' || needs.deny.result == 'skipped') &&
       (needs.reuse.result == 'success' || needs.reuse.result == 'skipped') &&
       (needs.msrv.result == 'success' || needs.msrv.result == 'skipped') &&
-      (needs.machete.result == 'success' || needs.machete.result == 'skipped') &&
-      (needs.doctest.result == 'success' || needs.doctest.result == 'skipped') &&
-      (needs.qual.result == 'success' || needs.qual.result == 'skipped')
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --all-features
-      - uses: actions/upload-artifact@v5
-        with:
-          name: sql-query-analyzer
-          path: target/release/sql_query_analyzer
+      (needs.machete.result == 'success' || needs.machete.result == 'skipped')
+    uses: ./.github/workflows/_build.yml
+    with:
+      rust_changed: ${{ needs.detect.outputs.rust }}
 
+  # Stage 5: Changelog (only on main after build)
   changelog:
-    name: Update Changelog
-    runs-on: ubuntu-latest
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.result == 'success'
     permissions:
       contents: write
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+    uses: ./.github/workflows/_changelog.yml
 
-      - name: Generate changelog
-        uses: orhun/git-cliff-action@v4
-        with:
-          config: cliff.toml
-          args: --verbose
-        env:
-          OUTPUT: CHANGELOG.md
-
-      - name: Commit changelog
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "docs: update changelog [skip ci]"
-            git pull --rebase origin main
-            git push
-          fi
-
-  # Release jobs - only on tag push
-  release-build:
-    name: Release Build ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
-    needs: [test, doc, audit, deny, reuse, msrv, machete, doctest]
+  # Stage 6: Tag release (after changelog)
+  tag:
+    needs: [build, changelog]
     if: |
-      startsWith(github.ref, 'refs/tags/v') &&
-      needs.test.result == 'success' &&
-      needs.doc.result == 'success' &&
-      (needs.audit.result == 'success' || needs.audit.result == 'skipped') &&
-      (needs.deny.result == 'success' || needs.deny.result == 'skipped') &&
-      (needs.reuse.result == 'success' || needs.reuse.result == 'skipped') &&
-      (needs.msrv.result == 'success' || needs.msrv.result == 'skipped') &&
-      (needs.machete.result == 'success' || needs.machete.result == 'skipped') &&
-      (needs.doctest.result == 'success' || needs.doctest.result == 'skipped')
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            archive: tar.gz
-            cross: false
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            archive: tar.gz
-            cross: true
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            archive: tar.gz
-            cross: true
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            archive: tar.gz
-            cross: false
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            archive: tar.gz
-            cross: false
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            archive: zip
-            cross: false
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: release-${{ matrix.target }}
-
-      - name: Install cross
-        if: matrix.cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
-
-      - name: Build with cross
-        if: matrix.cross
-        run: cross build --release --target ${{ matrix.target }}
-
-      - name: Build with cargo
-        if: ${{ !matrix.cross }}
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Package (Unix)
-        if: matrix.os != 'windows-latest'
-        run: |
-          cd target/${{ matrix.target }}/release
-          tar czf ../../../sql-query-analyzer-${{ matrix.target }}.tar.gz sql_query_analyzer
-
-      - name: Package (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          cd target/${{ matrix.target }}/release
-          Compress-Archive -Path sql_query_analyzer.exe -DestinationPath ../../../sql-query-analyzer-${{ matrix.target }}.zip
-
-      - uses: actions/upload-artifact@v5
-        with:
-          name: sql-query-analyzer-${{ matrix.target }}
-          path: sql-query-analyzer-${{ matrix.target }}.${{ matrix.archive }}
-
-  release:
-    name: Create Release
-    needs: [release-build]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.build.result == 'success' &&
+      (needs.changelog.result == 'success' || needs.changelog.result == 'skipped')
     permissions:
       contents: write
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+    uses: ./.github/workflows/_tag.yml
 
-      - name: Generate release notes
-        uses: orhun/git-cliff-action@v4
-        with:
-          config: cliff.toml
-          args: --verbose --latest --strip header
-        env:
-          OUTPUT: RELEASE_NOTES.md
+  # Stage 7: Release builds (only if new tag)
+  release-build:
+    needs: tag
+    if: needs.tag.outputs.new_tag == 'true'
+    uses: ./.github/workflows/_release-build.yml
+    with:
+      new_tag: ${{ needs.tag.outputs.new_tag }}
 
-      - uses: actions/download-artifact@v6
-        with:
-          path: artifacts
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          body_path: RELEASE_NOTES.md
-          files: artifacts/**/*
+  # Stage 8: Create release and publish (after release builds)
+  release:
+    needs: [tag, release-build]
+    if: needs.tag.outputs.new_tag == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/_release.yml
+    with:
+      new_tag: ${{ needs.tag.outputs.new_tag }}
+      version: ${{ needs.tag.outputs.version }}
 
   publish:
-    name: Publish to crates.io
-    needs: [release-build]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '.')
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Publish
-        run: |
-          output=$(cargo publish --token ${{ secrets.CRATES_IO_TOKEN }} --allow-dirty 2>&1) || {
-            if echo "$output" | grep -q "already exists"; then
-              echo "::notice::Version already published to crates.io"
-              exit 0
-            else
-              echo "$output"
-              exit 1
-            fi
-          }
+    needs: [tag, release-build]
+    if: needs.tag.outputs.new_tag == 'true'
+    uses: ./.github/workflows/_publish.yml
+    with:
+      new_tag: ${{ needs.tag.outputs.new_tag }}
+    secrets:
+      CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}

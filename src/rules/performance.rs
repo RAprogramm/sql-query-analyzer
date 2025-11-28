@@ -21,19 +21,20 @@ impl Rule for ScalarSubquery {
         let upper = query.raw.to_uppercase();
         if let Some(from_pos) = upper.find(" FROM ") {
             let select_part = &upper[..from_pos];
-            if select_part.contains("SELECT") && select_part.matches('(').count() > 0 {
-                if query.has_subquery {
-                    let info = self.info();
-                    return vec![Violation {
-                        rule_id: info.id,
-                        rule_name: info.name,
-                        message: "Scalar subquery in SELECT causes N+1 query pattern".to_string(),
-                        severity: info.severity,
-                        category: info.category,
-                        suggestion: Some("Use JOIN or window function instead".to_string()),
-                        query_index
-                    }];
-                }
+            if select_part.contains("SELECT")
+                && select_part.matches('(').count() > 0
+                && query.has_subquery
+            {
+                let info = self.info();
+                return vec![Violation {
+                    rule_id: info.id,
+                    rule_name: info.name,
+                    message: "Scalar subquery in SELECT causes N+1 query pattern".to_string(),
+                    severity: info.severity,
+                    category: info.category,
+                    suggestion: Some("Use JOIN or window function instead".to_string()),
+                    query_index
+                }];
             }
         }
         vec![]

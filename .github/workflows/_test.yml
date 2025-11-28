@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: 2025 RAprogramm
+# SPDX-License-Identifier: MIT
+
+name: Test
+
+on:
+  workflow_call:
+    inputs:
+      rust_changed:
+        required: true
+        type: string
+    secrets:
+      CODECOV_TOKEN:
+        required: false
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    if: inputs.rust_changed == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: taiki-e/install-action@nextest
+      - name: Run tests with coverage
+        run: cargo llvm-cov nextest --all-features --lcov --output-path lcov.info
+      - name: Generate JUnit report
+        run: cargo nextest run --all-features --profile ci
+        continue-on-error: true
+      - name: Upload coverage to Codecov
+        if: github.event_name != 'pull_request'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: lcov.info
+          fail_ci_if_error: false
+      - name: Upload test results to Codecov
+        if: github.event_name != 'pull_request' && !cancelled()
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: target/nextest/ci/results.junit.xml

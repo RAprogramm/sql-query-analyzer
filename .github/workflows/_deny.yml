@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2025 RAprogramm
+# SPDX-License-Identifier: MIT
+
+name: Dependency Check
+
+on:
+  workflow_call:
+    inputs:
+      deps_changed:
+        required: true
+        type: string
+
+jobs:
+  deny:
+    name: Dependency Check
+    runs-on: ubuntu-latest
+    if: inputs.deps_changed == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --all-features

@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2025 RAprogramm
+# SPDX-License-Identifier: MIT
+
+name: Doctests
+
+on:
+  workflow_call:
+    inputs:
+      rust_changed:
+        required: true
+        type: string
+
+jobs:
+  doctest:
+    name: Doctests
+    runs-on: ubuntu-latest
+    if: inputs.rust_changed == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: doctest
+      - name: Run doctests
+        run: cargo test --doc --all-features

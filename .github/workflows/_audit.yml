@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2025 RAprogramm
+# SPDX-License-Identifier: MIT
+
+name: Security Audit
+
+on:
+  workflow_call:
+    inputs:
+      deps_changed:
+        required: true
+        type: string
+
+jobs:
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    if: inputs.deps_changed == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

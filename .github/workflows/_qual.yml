@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2025 RAprogramm
+# SPDX-License-Identifier: MIT
+
+name: Quality Check
+
+on:
+  workflow_call:
+    inputs:
+      rust_changed:
+        required: true
+        type: string
+
+jobs:
+  qual:
+    name: Quality Check
+    runs-on: ubuntu-latest
+    if: inputs.rust_changed == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: RAprogramm/cargo-quality@v0
+        with:
+          path: src/
+          fail_on_issues: 'true'
+          post_comment: ${{ github.event_name == 'pull_request' }}
