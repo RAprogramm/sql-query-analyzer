@@ -401,3 +401,27 @@ fn test_truncate_multiple_tables() {
     let violations = analyze_query("TRUNCATE TABLE users, orders");
     assert!(violations.contains(&"SEC003".to_string()));
 }
+
+#[test]
+fn test_drop_table_detected() {
+    let violations = analyze_query("DROP TABLE users");
+    assert!(violations.contains(&"SEC004".to_string()));
+}
+
+#[test]
+fn test_drop_table_if_exists() {
+    let violations = analyze_query("DROP TABLE IF EXISTS users");
+    assert!(violations.contains(&"SEC004".to_string()));
+}
+
+#[test]
+fn test_drop_database_detected() {
+    let violations = analyze_query("DROP DATABASE production");
+    assert!(violations.contains(&"SEC004".to_string()));
+}
+
+#[test]
+fn test_drop_index_detected() {
+    let violations = analyze_query("DROP INDEX idx_users_email");
+    assert!(violations.contains(&"SEC004".to_string()));
+}

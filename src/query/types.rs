@@ -66,6 +66,7 @@ pub enum QueryType {
     Update,
     Delete,
     Truncate,
+    Drop,
     Other
 }
 
@@ -110,6 +111,7 @@ impl std::fmt::Display for QueryType {
             Self::Update => write!(f, "UPDATE"),
             Self::Delete => write!(f, "DELETE"),
             Self::Truncate => write!(f, "TRUNCATE"),
+            Self::Drop => write!(f, "DROP"),
             Self::Other => write!(f, "OTHER")
         }
     }
