@@ -128,27 +128,70 @@ runs:
         MARKER="<!-- sql-query-analyzer -->"
         PR_NUMBER=${{ github.event.pull_request.number }}
 
-        if [ "${{ steps.analyze.outputs.exit_code }}" = "0" ]; then
-          STATUS="✅ No issues found"
-        elif [ "${{ steps.analyze.outputs.exit_code }}" = "1" ]; then
-          STATUS="⚠️ ${{ steps.analyze.outputs.warning_count }} warning(s) found"
+        ERROR_COUNT=${{ steps.analyze.outputs.error_count }}
+        WARNING_COUNT=${{ steps.analyze.outputs.warning_count }}
+        EXIT_CODE=${{ steps.analyze.outputs.exit_code }}
+
+        # Build verdict section
+        if [ "$EXIT_CODE" = "0" ]; then
+          VERDICT="> [!TIP]
+        > **All SQL checks passed.** No issues found in your queries!"
+        elif [ "$EXIT_CODE" = "1" ]; then
+          VERDICT="> [!WARNING]
+        > **Found ${WARNING_COUNT} warning(s).** Consider reviewing before merging."
         else
-          STATUS="❌ ${{ steps.analyze.outputs.error_count }} error(s), ${{ steps.analyze.outputs.warning_count }} warning(s) found"
+          VERDICT="> [!CAUTION]
+        > **Found ${ERROR_COUNT} error(s) and ${WARNING_COUNT} warning(s).** Please fix before merging.
+        >
+        > - Run \`sql_query_analyzer analyze\` locally for detailed output"
         fi
 
+        # Status icons
+        if [ "${ERROR_COUNT:-0}" -eq 0 ]; then ERROR_STATUS="✅"; else ERROR_STATUS="❌"; fi
+        if [ "${WARNING_COUNT:-0}" -eq 0 ]; then WARNING_STATUS="✅"; else WARNING_STATUS="⚠️"; fi
+
+        # Build comment
         COMMENT="${MARKER}
         ## SQL Query Analysis
 
-        ${STATUS}
+        ${VERDICT}
 
         <details>
-        <summary>Details</summary>
+        <summary><strong>Results</strong> — analysis summary</summary>
+
+        > *Static analysis checks for performance issues, security vulnerabilities, and style violations.*
+
+        | Category | Count | Status |
+        |:---------|------:|:------:|
+        | Errors | ${ERROR_COUNT:-0} | ${ERROR_STATUS} |
+        | Warnings | ${WARNING_COUNT:-0} | ${WARNING_STATUS} |
+
+        </details>
+
+        <details>
+        <summary><strong>Analysis Details</strong> — full output</summary>
 
         \`\`\`
         ${{ steps.analyze.outputs.analysis }}
         \`\`\`
 
-        </details>"
+        </details>
+
+        <details>
+        <summary><strong>Configuration</strong> — analysis settings used</summary>
+
+        > *These settings were used for this analysis run.*
+
+        | Setting | Value |
+        |:--------|:------|
+        | Dialect | \`${{ inputs.dialect }}\` |
+        | Schema | \`${{ inputs.schema }}\` |
+        | Queries | \`${{ inputs.queries }}\` |
+
+        </details>
+
+        ---
+        <sub>[SQL Query Analyzer](https://github.com/RAprogramm/sql-query-analyzer)</sub>"
 
         if [ "${{ inputs.update-comment }}" = "true" ]; then
           EXISTING=$(gh api repos/${{ github.repository }}/issues/${PR_NUMBER}/comments \
