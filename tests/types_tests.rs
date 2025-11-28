@@ -35,10 +35,10 @@ fn test_severity_equality() {
 }
 
 #[test]
-fn test_severity_clone() {
+fn test_severity_copy() {
     let s = Severity::Error;
-    let cloned = s.clone();
-    assert_eq!(s, cloned);
+    let copied = s;
+    assert_eq!(s, copied);
 }
 
 #[test]
@@ -73,10 +73,10 @@ fn test_rule_category_equality() {
 }
 
 #[test]
-fn test_rule_category_clone() {
+fn test_rule_category_copy() {
     let c = RuleCategory::Security;
-    let cloned = c.clone();
-    assert_eq!(c, cloned);
+    let copied = c;
+    assert_eq!(c, copied);
 }
 
 #[test]

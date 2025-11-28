@@ -442,10 +442,10 @@ fn test_output_format_debug() {
 }
 
 #[test]
-fn test_output_format_clone() {
+fn test_output_format_copy() {
     let format = OutputFormat::Json;
-    let cloned = format.clone();
-    assert!(matches!(cloned, OutputFormat::Json));
+    let copied = format;
+    assert!(matches!(copied, OutputFormat::Json));
 }
 
 #[test]
