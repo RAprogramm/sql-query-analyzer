@@ -7,8 +7,10 @@ on:
   workflow_call:
     outputs:
       new_tag:
+        description: "Whether a new tag was created"
         value: ${{ jobs.tag-release.outputs.new_tag }}
       version:
+        description: "The version from Cargo.toml"
         value: ${{ jobs.tag-release.outputs.version }}
 
 jobs:

@@ -7,10 +7,13 @@ on:
   workflow_call:
     outputs:
       rust:
+        description: "Whether Rust files changed"
         value: ${{ jobs.changes.outputs.rust }}
       deps:
+        description: "Whether dependency files changed"
         value: ${{ jobs.changes.outputs.deps }}
       reuse:
+        description: "Whether REUSE-related files changed"
         value: ${{ jobs.changes.outputs.reuse }}
 
 jobs:
