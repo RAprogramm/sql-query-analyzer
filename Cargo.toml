@@ -1,13 +1,13 @@
 [package]
 name = "sql_query_analyzer"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 authors = ["RAprogramm <andrey.rozanov.vl@gmail.com>"]
 description = "Static analysis tool for SQL queries with 18 built-in rules for performance, security, and style"
 license = "MIT"
 repository = "https://github.com/RAprogramm/sql-query-analyzer"
 homepage = "https://github.com/RAprogramm/sql-query-analyzer"
-documentation = "https://docs.rs/sql_query_analyzer"
+documentation = "https://docs.rs/sql-query-analyzer"
 readme = "README.md"
 keywords = ["sql", "analyzer", "linter", "performance", "database"]
 categories = ["development-tools", "command-line-utilities", "database"]
@@ -19,7 +19,7 @@ name = "sql_query_analyzer"
 path = "src/lib.rs"
 
 [[bin]]
-name = "sql_query_analyzer"
+name = "sql-query-analyzer"
 path = "src/main.rs"
 
 [dependencies]

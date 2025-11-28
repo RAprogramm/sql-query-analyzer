@@ -292,7 +292,7 @@ jobs:
       - uses: actions/upload-artifact@v5
         with:
           name: sql-query-analyzer
-          path: target/release/sql_query_analyzer
+          path: target/release/sql-query-analyzer
 
   changelog:
     name: Update Changelog
@@ -398,13 +398,13 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf ../../../sql-query-analyzer-${{ matrix.target }}.tar.gz sql_query_analyzer
+          tar czf ../../../sql-query-analyzer-${{ matrix.target }}.tar.gz sql-query-analyzer
 
       - name: Package (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          Compress-Archive -Path sql_query_analyzer.exe -DestinationPath ../../../sql-query-analyzer-${{ matrix.target }}.zip
+          Compress-Archive -Path sql-query-analyzer.exe -DestinationPath ../../../sql-query-analyzer-${{ matrix.target }}.zip
 
       - uses: actions/upload-artifact@v5
         with:
