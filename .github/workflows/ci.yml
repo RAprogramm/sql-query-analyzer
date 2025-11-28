@@ -29,9 +29,9 @@ jobs:
           fetch-depth: 0
       - uses: RAprogramm/rust-prod-diff-checker@v1
         with:
-          max-lines: 200
-          format: comment
-          post-comment: true
+          max_prod_lines: '200'
+          output_format: comment
+          post_comment: 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
