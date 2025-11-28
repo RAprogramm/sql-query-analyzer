@@ -2,6 +2,7 @@
 //!
 //! Static analysis library for SQL queries.
 
+pub mod app;
 pub mod cache;
 pub mod cli;
 pub mod config;

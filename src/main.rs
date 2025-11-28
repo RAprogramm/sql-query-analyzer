@@ -133,7 +133,9 @@
 //! - [`output`] - Result formatting for various output formats
 //! - [`cache`] - Query parsing cache for performance
 //! - [`error`] - Error types and constructors
+//! - [`app`] - Application logic for CLI commands
 
+mod app;
 mod cache;
 mod cli;
 mod config;
@@ -144,30 +146,16 @@ mod query;
 mod rules;
 mod schema;
 
-use std::{
-    fs::read_to_string,
-    io::{self, Read},
-    process,
-    time::Duration
-};
+use std::process;
 
 use clap::Parser;
-use indicatif::{ProgressBar, ProgressStyle};
 use tokio::main;
 
 use crate::{
-    cache::{cache_queries, get_cached},
-    cli::{Cli, Commands, Dialect, Format, Provider},
+    app::{AnalyzeParams, run_analyze},
+    cli::{Cli, Commands},
     config::Config,
-    error::{AppResult, config_error, file_read_error},
-    llm::{LlmClient, LlmProvider},
-    output::{
-        OutputFormat, OutputOptions, format_analysis_result, format_queries_summary,
-        format_static_analysis
-    },
-    query::{SqlDialect, parse_queries},
-    rules::{RuleRunner, Severity},
-    schema::Schema
+    error::AppResult
 };
 
 #[main]
@@ -184,6 +172,7 @@ async fn main() {
 async fn run() -> AppResult<i32> {
     let cli = Cli::parse();
     let config = Config::load()?;
+
     match cli.command {
         Commands::Analyze {
             schema,
@@ -198,125 +187,41 @@ async fn run() -> AppResult<i32> {
             dry_run,
             no_color
         } => {
-            let schema_sql = read_to_string(&schema)
-                .map_err(|e| file_read_error(&schema.display().to_string(), e))?;
-            let queries_sql = if queries.to_str() == Some("-") {
-                let mut buffer = String::new();
-                io::stdin()
-                    .read_to_string(&mut buffer)
-                    .map_err(|e| file_read_error("stdin", e))?;
-                buffer
-            } else {
-                read_to_string(&queries)
-                    .map_err(|e| file_read_error(&queries.display().to_string(), e))?
-            };
-            let sql_dialect = match dialect {
-                Dialect::Generic => SqlDialect::Generic,
-                Dialect::Mysql => SqlDialect::MySQL,
-                Dialect::Postgresql => SqlDialect::PostgreSQL,
-                Dialect::Sqlite => SqlDialect::SQLite
-            };
-            let parsed_schema = Schema::parse(&schema_sql)?;
-            let parsed_queries = if let Some(cached) = get_cached(&queries_sql) {
-                cached
-            } else {
-                let queries = parse_queries(&queries_sql, sql_dialect)?;
-                cache_queries(&queries_sql, queries.clone());
-                queries
-            };
-            let schema_summary = parsed_schema.to_summary();
-            let output_opts = OutputOptions {
-                format: match output_format {
-                    Format::Text => OutputFormat::Text,
-                    Format::Json => OutputFormat::Json,
-                    Format::Yaml => OutputFormat::Yaml,
-                    Format::Sarif => OutputFormat::Sarif
+            let params = AnalyzeParams {
+                schema_path: schema.display().to_string(),
+                queries_path: if queries.to_str() == Some("-") {
+                    "-".to_string()
+                } else {
+                    queries.display().to_string()
                 },
-                colored: !no_color,
-                verbose
+                provider,
+                api_key,
+                model,
+                ollama_url,
+                dialect,
+                output_format,
+                verbose,
+                dry_run,
+                no_color
             };
-            let runner =
-                RuleRunner::with_schema_and_config(parsed_schema.clone(), config.rules.clone());
-            let static_report = runner.analyze(&parsed_queries);
-            let static_output = format_static_analysis(&static_report, &output_opts);
-            println!("{}", static_output);
-            let exit_code = if static_report
-                .violations
-                .iter()
-                .any(|v| v.severity == Severity::Error)
-            {
-                2
-            } else if static_report
-                .violations
-                .iter()
-                .any(|v| v.severity == Severity::Warning)
-            {
-                1
-            } else {
-                0
-            };
-            if dry_run {
-                let queries_summary = format_queries_summary(&parsed_queries, &output_opts);
+
+            let result = run_analyze(params, config).await?;
+
+            println!("{}", result.static_output);
+
+            if let Some(dry_run_info) = result.dry_run_info {
                 println!("=== DRY RUN - Would send to LLM ===\n");
-                println!("Schema Summary:\n{}\n", schema_summary);
-                println!("Queries Summary:\n{}", queries_summary);
-                return Ok(exit_code);
-            }
-            let effective_api_key = api_key.or(config.llm.api_key.clone());
-            let effective_ollama_url = if ollama_url == "http://localhost:11434" {
-                config.llm.ollama_url.clone().unwrap_or(ollama_url)
-            } else {
-                ollama_url
-            };
-            let has_llm_access =
-                effective_api_key.is_some() || matches!(provider, Provider::Ollama);
-            if !has_llm_access {
+                println!("Schema Summary:\n{}\n", dry_run_info.schema_summary);
+                println!("Queries Summary:\n{}", dry_run_info.queries_summary);
+            } else if result.llm_output.is_none() && !dry_run {
                 println!("Note: Set LLM_API_KEY for additional AI-powered analysis\n");
-                return Ok(exit_code);
             }
-            let model_name = model
-                .or(config.llm.model.clone())
-                .unwrap_or_else(|| provider.default_model().to_string());
-            let llm_provider = match provider {
-                Provider::OpenAI => {
-                    let key = effective_api_key.ok_or_else(|| {
-                        config_error("API key required for OpenAI (use --api-key or LLM_API_KEY)")
-                    })?;
-                    LlmProvider::OpenAI {
-                        api_key: key,
-                        model:   model_name
-                    }
-                }
-                Provider::Anthropic => {
-                    let key = effective_api_key.ok_or_else(|| {
-                        config_error(
-                            "API key required for Anthropic (use --api-key or LLM_API_KEY)"
-                        )
-                    })?;
-                    LlmProvider::Anthropic {
-                        api_key: key,
-                        model:   model_name
-                    }
-                }
-                Provider::Ollama => LlmProvider::Ollama {
-                    base_url: effective_ollama_url,
-                    model:    model_name
-                }
-            };
-            let pb = ProgressBar::new_spinner();
-            if let Ok(style) = ProgressStyle::default_spinner().template("{spinner:.green} {msg}")
-            {
-                pb.set_style(style);
+
+            if let Some(llm_output) = result.llm_output {
+                println!("{}", llm_output);
             }
-            pb.set_message("Analyzing queries with LLM...");
-            pb.enable_steady_tick(Duration::from_millis(100));
-            let queries_summary = format_queries_summary(&parsed_queries, &output_opts);
-            let client = LlmClient::with_retry_config(llm_provider, config.retry);
-            let analysis = client.analyze(&schema_summary, &queries_summary).await?;
-            pb.finish_and_clear();
-            let output = format_analysis_result(&parsed_queries, &analysis, &output_opts);
-            println!("{}", output);
-            Ok(exit_code)
+
+            Ok(result.exit_code)
         }
     }
 }
