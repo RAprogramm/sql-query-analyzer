@@ -177,9 +177,19 @@ jobs:
       contents: write
     uses: ./.github/workflows/_tag.yml
 
+  # Debug: Check tag outputs
+  debug-tag:
+    needs: tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug outputs
+        run: |
+          echo "new_tag output: '${{ needs.tag.outputs.new_tag }}'"
+          echo "version output: '${{ needs.tag.outputs.version }}'"
+
   # Stage 7: Release builds (only if new tag)
   release-build:
-    needs: tag
+    needs: [tag, debug-tag]
     if: needs.tag.outputs.new_tag == 'true'
     uses: ./.github/workflows/_release-build.yml
     with:
