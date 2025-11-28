@@ -1,6 +1,49 @@
 use super::{Rule, RuleCategory, RuleInfo, Severity, Violation};
 use crate::query::{Query, QueryType};
 
+/// Detects TRUNCATE statements which can instantly delete all data
+///
+/// TRUNCATE is one of the most dangerous SQL operations:
+/// - Instant data loss without possibility of rollback in most configurations
+/// - No WHERE clause - cannot be limited to specific rows
+/// - Bypasses triggers - DELETE triggers don't fire on TRUNCATE
+/// - Minimal logging - harder to recover from transaction logs
+pub struct TruncateDetected;
+
+impl Rule for TruncateDetected {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "SEC003",
+            name:     "TRUNCATE statement detected",
+            severity: Severity::Error,
+            category: RuleCategory::Security
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        if query.query_type != QueryType::Truncate {
+            return vec![];
+        }
+        let info = self.info();
+        let table_names = query.tables.join(", ");
+        vec![Violation {
+            rule_id: info.id,
+            rule_name: info.name,
+            message: format!(
+                "TRUNCATE removes all rows from table(s) '{}' without logging individual deletions",
+                table_names
+            ),
+            severity: info.severity,
+            category: info.category,
+            suggestion: Some(
+                "Use DELETE with WHERE for safer data removal, or ensure backups exist"
+                    .to_string()
+            ),
+            query_index
+        }]
+    }
+}
+
 /// UPDATE without WHERE affects all rows
 pub struct MissingWhereInUpdate;
 

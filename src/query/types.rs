@@ -59,11 +59,13 @@ pub struct QueryComplexity {
 
 /// Type of SQL query
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
 pub enum QueryType {
     Select,
     Insert,
     Update,
     Delete,
+    Truncate,
     Other
 }
 
@@ -107,6 +109,7 @@ impl std::fmt::Display for QueryType {
             Self::Insert => write!(f, "INSERT"),
             Self::Update => write!(f, "UPDATE"),
             Self::Delete => write!(f, "DELETE"),
+            Self::Truncate => write!(f, "TRUNCATE"),
             Self::Other => write!(f, "OTHER")
         }
     }

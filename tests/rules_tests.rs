@@ -383,3 +383,21 @@ fn test_multiple_queries() {
     assert!(violations.contains(&"PERF001".to_string()));
     assert!(violations.contains(&"SEC002".to_string()));
 }
+
+#[test]
+fn test_truncate_detected() {
+    let violations = analyze_query("TRUNCATE TABLE users");
+    assert!(violations.contains(&"SEC003".to_string()));
+}
+
+#[test]
+fn test_truncate_without_table_keyword() {
+    let violations = analyze_query("TRUNCATE users");
+    assert!(violations.contains(&"SEC003".to_string()));
+}
+
+#[test]
+fn test_truncate_multiple_tables() {
+    let violations = analyze_query("TRUNCATE TABLE users, orders");
+    assert!(violations.contains(&"SEC003".to_string()));
+}
