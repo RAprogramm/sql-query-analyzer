@@ -33,8 +33,9 @@ jobs:
       - uses: RAprogramm/rust-prod-diff-checker@v1
         with:
           max_prod_lines: '200'
-          output_format: comment
+          output_format: github
           post_comment: 'true'
+          fail_on_exceed: 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
