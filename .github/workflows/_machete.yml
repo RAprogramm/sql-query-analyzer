@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2025 RAprogramm
+# SPDX-License-Identifier: MIT
+
+name: Unused Dependencies
+
+on:
+  workflow_call:
+    inputs:
+      deps_changed:
+        required: true
+        type: string
+
+jobs:
+  machete:
+    name: Unused Dependencies
+    runs-on: ubuntu-latest
+    if: inputs.deps_changed == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: machete
+      - uses: taiki-e/install-action@cargo-machete
+      - name: Check for unused dependencies
+        run: cargo machete

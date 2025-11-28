@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2025 RAprogramm
+# SPDX-License-Identifier: MIT
+
+name: Documentation
+
+on:
+  workflow_call:
+    inputs:
+      rust_changed:
+        required: true
+        type: string
+
+jobs:
+  doc:
+    name: Documentation
+    runs-on: ubuntu-latest
+    if: inputs.rust_changed == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo doc --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: -D warnings

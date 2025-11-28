@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2025 RAprogramm
+# SPDX-License-Identifier: MIT
+
+name: Publish to crates.io
+
+on:
+  workflow_call:
+    inputs:
+      new_tag:
+        required: true
+        type: string
+    secrets:
+      CRATES_IO_TOKEN:
+        required: true
+
+jobs:
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    if: inputs.new_tag == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Publish
+        run: |
+          output=$(cargo publish --token ${{ secrets.CRATES_IO_TOKEN }} --allow-dirty 2>&1) || {
+            if echo "$output" | grep -q "already exists"; then
+              echo "::notice::Version already published to crates.io"
+              exit 0
+            else
+              echo "$output"
+              exit 1
+            fi
+          }

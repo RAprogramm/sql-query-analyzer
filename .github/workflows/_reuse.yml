@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2025 RAprogramm
+# SPDX-License-Identifier: MIT
+
+name: REUSE Compliance
+
+on:
+  workflow_call:
+    inputs:
+      reuse_changed:
+        required: true
+        type: string
+
+jobs:
+  reuse:
+    name: REUSE Compliance
+    runs-on: ubuntu-latest
+    if: inputs.reuse_changed == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: fsfe/reuse-action@v6

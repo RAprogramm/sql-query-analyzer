@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2025 RAprogramm
+# SPDX-License-Identifier: MIT
+
+name: Semver Check
+
+on:
+  workflow_call:
+    inputs:
+      rust_changed:
+        required: true
+        type: string
+
+jobs:
+  semver:
+    name: Semver Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && inputs.rust_changed == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: semver
+      - uses: taiki-e/install-action@cargo-semver-checks
+      - name: Check semver compatibility
+        run: cargo semver-checks check-release --default-features

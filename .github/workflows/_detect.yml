@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: 2025 RAprogramm
+# SPDX-License-Identifier: MIT
+
+name: Detect Changes
+
+on:
+  workflow_call:
+    outputs:
+      rust:
+        value: ${{ jobs.changes.outputs.rust }}
+      deps:
+        value: ${{ jobs.changes.outputs.deps }}
+      reuse:
+        value: ${{ jobs.changes.outputs.reuse }}
+
+jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      deps: ${{ steps.filter.outputs.deps }}
+      reuse: ${{ steps.filter.outputs.reuse }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'src/**'
+              - 'tests/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.rustfmt.toml'
+            deps:
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+            reuse:
+              - 'LICENSES/**'
+              - '.reuse/**'
+              - '**/*.rs'
+              - '**/*.toml'
+              - '**/*.yml'
+              - '**/*.md'

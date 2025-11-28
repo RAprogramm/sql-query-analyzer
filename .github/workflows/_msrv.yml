@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2025 RAprogramm
+# SPDX-License-Identifier: MIT
+
+name: MSRV
+
+on:
+  workflow_call:
+    inputs:
+      rust_changed:
+        required: true
+        type: string
+
+jobs:
+  msrv:
+    name: MSRV (1.90)
+    runs-on: ubuntu-latest
+    if: inputs.rust_changed == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.90.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv
+      - name: Check MSRV compatibility
+        run: cargo check --all-features --all-targets
