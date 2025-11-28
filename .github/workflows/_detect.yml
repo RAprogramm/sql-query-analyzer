@@ -26,9 +26,12 @@ jobs:
       reuse: ${{ steps.filter.outputs.reuse }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          base: ${{ github.event.before }}
           filters: |
             rust:
               - 'src/**'

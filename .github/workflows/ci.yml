@@ -42,7 +42,9 @@ jobs:
   # Stage 2: Detect changes
   detect:
     needs: pr-size
-    if: always() && (needs.pr-size.result == 'success' || needs.pr-size.result == 'skipped')
+    if: |
+      always() &&
+      (github.event_name == 'push' || needs.pr-size.result == 'success')
     uses: ./.github/workflows/_detect.yml
 
   # Stage 3: All checks (parallel)
