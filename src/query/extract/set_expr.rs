@@ -8,11 +8,9 @@ use super::{
 
 pub fn extract_from_set_expr(set_expr: &sqlparser::ast::SetExpr, ctx: &mut ExtractionContext<'_>) {
     use sqlparser::ast::SetExpr;
-
     match set_expr {
         SetExpr::Select(select) => {
             *ctx.has_distinct = select.distinct.is_some();
-
             for item in &select.projection {
                 if let sqlparser::ast::SelectItem::UnnamedExpr(expr)
                 | sqlparser::ast::SelectItem::ExprWithAlias {
@@ -25,13 +23,10 @@ pub fn extract_from_set_expr(set_expr: &sqlparser::ast::SetExpr, ctx: &mut Extra
                     }
                 }
             }
-
             for table in &select.from {
                 extract_from_table_factor(&table.relation, ctx.tables);
-
                 for join in &table.joins {
                     extract_from_table_factor(&join.relation, ctx.tables);
-
                     match &join.join_operator {
                         sqlparser::ast::JoinOperator::Inner(constraint)
                         | sqlparser::ast::JoinOperator::LeftOuter(constraint)
@@ -45,20 +40,17 @@ pub fn extract_from_set_expr(set_expr: &sqlparser::ast::SetExpr, ctx: &mut Extra
                     }
                 }
             }
-
             if let Some(selection) = &select.selection {
                 extract_columns_from_expr(selection, ctx.where_cols);
                 if contains_subquery(selection) {
                     *ctx.has_subquery = true;
                 }
             }
-
             if let sqlparser::ast::GroupByExpr::Expressions(exprs, _) = &select.group_by {
                 for expr in exprs {
                     extract_columns_from_expr(expr, ctx.group_cols);
                 }
             }
-
             if let Some(having) = &select.having {
                 extract_columns_from_expr(having, ctx.having_cols);
             }

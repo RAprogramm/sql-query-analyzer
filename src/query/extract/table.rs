@@ -8,7 +8,6 @@ pub fn extract_from_table_factor(
     tables: &mut IndexSet<CompactString>
 ) {
     use sqlparser::ast::TableFactor;
-
     match table_factor {
         TableFactor::Table {
             name, ..

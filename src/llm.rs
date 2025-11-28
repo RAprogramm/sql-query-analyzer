@@ -158,7 +158,6 @@ impl LlmClient {
             .timeout(Duration::from_secs(120))
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
-
         Self {
             provider,
             client,
@@ -169,29 +168,24 @@ impl LlmClient {
     /// Analyze SQL queries using LLM with automatic retry
     pub async fn analyze(&self, schema_summary: &str, queries_summary: &str) -> AppResult<String> {
         let prompt = format!(
-            r#"You are a database performance expert. Analyze the following SQL queries for potential performance issues, especially regarding index usage.
-
-{}
-
-{}
-
-For each query, identify:
-1. Whether existing indexes can be used effectively
-2. Missing indexes that would improve performance
-3. Full table scans or inefficient operations
-4. Suggestions for query optimization
-
-Provide specific, actionable recommendations."#,
-            schema_summary, queries_summary
+            "You are a database performance expert. Analyze the following SQL queries \
+             for potential performance issues, especially regarding index usage.\n\n\
+             {schema}\n\n{queries}\n\n\
+             For each query, identify:\n\
+             1. Whether existing indexes can be used effectively\n\
+             2. Missing indexes that would improve performance\n\
+             3. Full table scans or inefficient operations\n\
+             4. Suggestions for query optimization\n\
+             Provide specific, actionable recommendations.",
+            schema = schema_summary,
+            queries = queries_summary
         );
-
         self.call_with_retry(&prompt).await
     }
 
     async fn call_with_retry(&self, prompt: &str) -> AppResult<String> {
         let mut last_error = None;
         let mut delay = self.retry_config.initial_delay_ms;
-
         for attempt in 0..=self.retry_config.max_retries {
             if attempt > 0 {
                 eprintln!(
@@ -204,7 +198,6 @@ Provide specific, actionable recommendations."#,
                 delay = ((delay as f64 * self.retry_config.backoff_factor) as u64)
                     .min(self.retry_config.max_delay_ms);
             }
-
             match self.call_provider(prompt).await {
                 Ok(result) => return Ok(result),
                 Err(e) => {
@@ -216,7 +209,6 @@ Provide specific, actionable recommendations."#,
                 }
             }
         }
-
         Err(last_error.unwrap_or_else(|| llm_api_error("All retry attempts failed")))
     }
 
@@ -257,7 +249,6 @@ Provide specific, actionable recommendations."#,
                 content: prompt.to_string()
             }]
         };
-
         let response = self
             .client
             .post("https://api.openai.com/v1/chat/completions")
@@ -266,7 +257,6 @@ Provide specific, actionable recommendations."#,
             .send()
             .await
             .map_err(http_error)?;
-
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
@@ -275,9 +265,7 @@ Provide specific, actionable recommendations."#,
                 status, text
             )));
         }
-
         let result: OpenAIResponse = response.json().await.map_err(http_error)?;
-
         result
             .choices
             .first()
@@ -294,7 +282,6 @@ Provide specific, actionable recommendations."#,
                 content: prompt.to_string()
             }]
         };
-
         let response = self
             .client
             .post("https://api.anthropic.com/v1/messages")
@@ -304,7 +291,6 @@ Provide specific, actionable recommendations."#,
             .send()
             .await
             .map_err(http_error)?;
-
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
@@ -313,9 +299,7 @@ Provide specific, actionable recommendations."#,
                 status, text
             )));
         }
-
         let result: AnthropicResponse = response.json().await.map_err(http_error)?;
-
         result
             .content
             .first()
@@ -329,9 +313,7 @@ Provide specific, actionable recommendations."#,
             prompt: prompt.to_string(),
             stream: false
         };
-
         let url = format!("{}/api/generate", base_url.trim_end_matches('/'));
-
         let response = self
             .client
             .post(&url)
@@ -339,7 +321,6 @@ Provide specific, actionable recommendations."#,
             .send()
             .await
             .map_err(http_error)?;
-
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
@@ -348,9 +329,7 @@ Provide specific, actionable recommendations."#,
                 status, text
             )));
         }
-
         let result: OllamaResponse = response.json().await.map_err(http_error)?;
-
         Ok(result.response)
     }
 }

@@ -8,7 +8,6 @@ pub fn extract_columns_from_expr(
     columns: &mut IndexSet<CompactString>
 ) {
     use sqlparser::ast::Expr;
-
     match expr {
         Expr::Identifier(ident) => {
             columns.insert(ident.value.as_str().into());
@@ -111,13 +110,11 @@ pub fn extract_columns_from_expr(
 
 pub fn extract_window_functions(expr: &sqlparser::ast::Expr, windows: &mut Vec<WindowFunction>) {
     use sqlparser::ast::Expr;
-
     match expr {
         Expr::Function(func) => {
             if let Some(over) = &func.over {
                 let mut partition_cols = Vec::new();
                 let mut order_cols = Vec::new();
-
                 if let sqlparser::ast::WindowType::WindowSpec(spec) = over {
                     for part_expr in &spec.partition_by {
                         if let Expr::Identifier(ident) = part_expr {
@@ -128,7 +125,6 @@ pub fn extract_window_functions(expr: &sqlparser::ast::Expr, windows: &mut Vec<W
                             partition_cols.push(col.value.as_str().into());
                         }
                     }
-
                     for order_expr in &spec.order_by {
                         if let Expr::Identifier(ident) = &order_expr.expr {
                             order_cols.push(ident.value.as_str().into());
@@ -139,14 +135,12 @@ pub fn extract_window_functions(expr: &sqlparser::ast::Expr, windows: &mut Vec<W
                         }
                     }
                 }
-
                 windows.push(WindowFunction {
                     name: func.name.to_string().into(),
                     partition_cols,
                     order_cols
                 });
             }
-
             if let sqlparser::ast::FunctionArguments::List(arg_list) = &func.args {
                 for arg in &arg_list.args {
                     if let sqlparser::ast::FunctionArg::Unnamed(
@@ -190,7 +184,6 @@ pub fn extract_window_functions(expr: &sqlparser::ast::Expr, windows: &mut Vec<W
 
 pub fn contains_subquery(expr: &sqlparser::ast::Expr) -> bool {
     use sqlparser::ast::Expr;
-
     match expr {
         Expr::Subquery(_)
         | Expr::InSubquery {

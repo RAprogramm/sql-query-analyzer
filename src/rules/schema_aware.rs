@@ -39,11 +39,8 @@ impl Rule for MissingIndexOnFilterColumn {
         if query.query_type != QueryType::Select {
             return vec![];
         }
-
         let indexed_cols = self.get_indexed_columns();
         let mut violations = Vec::new();
-
-        // Check WHERE columns
         for col in &query.where_cols {
             let col_lower = col.to_lowercase();
             if !indexed_cols.iter().any(|c| c.to_lowercase() == col_lower) {
@@ -59,8 +56,6 @@ impl Rule for MissingIndexOnFilterColumn {
                 });
             }
         }
-
-        // Check JOIN columns
         for col in &query.join_cols {
             let col_lower = col.to_lowercase();
             if !indexed_cols.iter().any(|c| c.to_lowercase() == col_lower) {
@@ -76,7 +71,6 @@ impl Rule for MissingIndexOnFilterColumn {
                 });
             }
         }
-
         violations
     }
 }
@@ -115,8 +109,6 @@ impl Rule for ColumnNotInSchema {
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
         let all_cols = self.get_all_columns();
         let mut violations = Vec::new();
-
-        // Combine all columns from query
         let query_cols: Vec<&str> = query
             .where_cols
             .iter()
@@ -125,10 +117,8 @@ impl Rule for ColumnNotInSchema {
             .chain(query.group_cols.iter())
             .map(|s| s.as_str())
             .collect();
-
         for col in query_cols {
             let col_lower = col.to_lowercase();
-            // Skip common literals and expressions
             if col_lower.chars().all(|c| c.is_numeric() || c == '.') {
                 continue;
             }
@@ -145,7 +135,6 @@ impl Rule for ColumnNotInSchema {
                 });
             }
         }
-
         violations
     }
 }
@@ -177,15 +166,12 @@ impl Rule for SuggestIndex {
         if query.query_type != QueryType::Select {
             return vec![];
         }
-
-        // Check for ORDER BY columns without index
         let indexed_cols: Vec<String> = self
             .schema
             .tables
             .values()
             .flat_map(|t| t.indexes.iter().flat_map(|idx| idx.columns.clone()))
             .collect();
-
         for col in &query.order_cols {
             let col_lower = col.to_lowercase();
             if !indexed_cols.iter().any(|c| c.to_lowercase() == col_lower) {
@@ -197,15 +183,14 @@ impl Rule for SuggestIndex {
                     severity: info.severity,
                     category: info.category,
                     suggestion: Some(format!(
-                        "CREATE INDEX idx_{} ON table({})",
-                        col.to_lowercase(),
-                        col
+                        "CREATE INDEX idx_{col_lower} ON table({col})",
+                        col_lower = col.to_lowercase(),
+                        col = col
                     )),
                     query_index
                 }];
             }
         }
-
         vec![]
     }
 }

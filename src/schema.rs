@@ -101,25 +101,20 @@ impl Schema {
         let dialect = GenericDialect {};
         let statements =
             Parser::parse_sql(&dialect, sql).map_err(|e| schema_parse_error(e.to_string()))?;
-
         let mut schema = Self::default();
-
         for stmt in statements {
             schema.process_statement(stmt)?;
         }
-
         Ok(schema)
     }
 
     fn process_statement(&mut self, stmt: sqlparser::ast::Statement) -> AppResult<()> {
         use sqlparser::ast::Statement;
-
         match stmt {
             Statement::CreateTable(create) => {
                 let table_name = create.name.to_string();
                 let mut columns = Vec::new();
                 let mut indexes = Vec::new();
-
                 for column in create.columns {
                     let is_primary = column.options.iter().any(|opt| {
                         matches!(
@@ -130,7 +125,6 @@ impl Schema {
                             }
                         )
                     });
-
                     columns.push(ColumnInfo {
                         name: column.name.to_string(),
                         data_type: column.data_type.to_string(),
@@ -140,7 +134,6 @@ impl Schema {
                         is_primary
                     });
                 }
-
                 for constraint in create.constraints {
                     if let sqlparser::ast::TableConstraint::Index {
                         name,
@@ -155,7 +148,6 @@ impl Schema {
                         });
                     }
                 }
-
                 self.tables.insert(
                     table_name.clone(),
                     TableInfo {
@@ -177,43 +169,40 @@ impl Schema {
             }
             _ => {}
         }
-
         Ok(())
     }
 
     /// Get summary of schema for LLM analysis
     pub fn to_summary(&self) -> String {
         let mut summary = String::from("Database Schema:\n\n");
-
         for table in self.tables.values() {
             summary.push_str(&format!("Table: {}\n", table.name));
             summary.push_str("Columns:\n");
-
             for col in &table.columns {
                 let nullable = if col.is_nullable { "NULL" } else { "NOT NULL" };
                 let primary = if col.is_primary { " PRIMARY KEY" } else { "" };
                 summary.push_str(&format!(
-                    "  - {} {} {}{}\n",
-                    col.name, col.data_type, nullable, primary
+                    "  - {name} {data_type} {nullable}{primary}\n",
+                    name = col.name,
+                    data_type = col.data_type,
+                    nullable = nullable,
+                    primary = primary
                 ));
             }
-
             if !table.indexes.is_empty() {
                 summary.push_str("Indexes:\n");
                 for idx in &table.indexes {
                     let unique = if idx.is_unique { "UNIQUE " } else { "" };
                     summary.push_str(&format!(
-                        "  - {}INDEX {} ON ({})\n",
-                        unique,
-                        idx.name,
-                        idx.columns.join(", ")
+                        "  - {unique}INDEX {name} ON ({columns})\n",
+                        unique = unique,
+                        name = idx.name,
+                        columns = idx.columns.join(", ")
                     ));
                 }
             }
-
             summary.push('\n');
         }
-
         summary
     }
 }

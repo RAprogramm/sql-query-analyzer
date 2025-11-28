@@ -65,15 +65,18 @@ impl QueryCache {
         self.cache.get(&key).cloned()
     }
 
+    /// Insert queries into cache
+    ///
+    /// # Notes
+    ///
+    /// - Simple eviction: clear half when full
     pub fn insert(&mut self, sql: &str, queries: Vec<Query>) {
-        // Simple eviction: clear half when full
         if self.cache.len() >= self.max_size {
             let keys: Vec<_> = self.cache.keys().take(self.max_size / 2).copied().collect();
             for key in keys {
                 self.cache.remove(&key);
             }
         }
-
         let key = Self::hash_key(sql);
         self.cache.insert(key, queries);
     }

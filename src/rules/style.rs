@@ -18,10 +18,8 @@ impl Rule for SelectStar {
         if query.query_type != QueryType::Select {
             return vec![];
         }
-
         let has_star = query.raw.to_uppercase().contains("SELECT *")
             || query.raw.to_uppercase().contains("SELECT  *");
-
         if has_star {
             let info = self.info();
             return vec![Violation {
@@ -36,7 +34,6 @@ impl Rule for SelectStar {
                 query_index
             }];
         }
-
         vec![]
     }
 }
@@ -58,17 +55,11 @@ impl Rule for MissingTableAlias {
         if query.query_type != QueryType::Select {
             return vec![];
         }
-
-        // Only check if we have multiple tables
         if query.tables.len() <= 1 {
             return vec![];
         }
-
-        // Check if any table names contain space (would indicate alias)
-        // Also check for common alias patterns in the raw SQL
         let upper = query.raw.to_uppercase();
         let has_aliases = upper.contains(" AS ") || query.tables.iter().any(|t| t.contains(' '));
-
         if !has_aliases && !query.join_cols.is_empty() {
             let info = self.info();
             return vec![Violation {
@@ -83,7 +74,6 @@ impl Rule for MissingTableAlias {
                 query_index
             }];
         }
-
         vec![]
     }
 }

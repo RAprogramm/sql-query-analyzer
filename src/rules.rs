@@ -180,9 +180,14 @@ impl RuleRunner {
     }
 
     /// Create a new runner with configuration
+    ///
+    /// # Notes
+    ///
+    /// - Performance rules (PERF001-PERF011) detect query optimization issues
+    /// - Style rules (STYLE001-STYLE002) enforce best practices
+    /// - Security rules (SEC001-SEC002) detect dangerous operations
     pub fn with_config(config: RulesConfig) -> Self {
         let all_rules: Vec<Box<dyn Rule>> = vec![
-            // Performance rules
             Box::new(performance::SelectStarWithoutLimit),
             Box::new(performance::LeadingWildcard),
             Box::new(performance::OrInsteadOfIn),
@@ -194,15 +199,11 @@ impl RuleRunner {
             Box::new(performance::NotInWithSubquery),
             Box::new(performance::UnionWithoutAll),
             Box::new(performance::SelectWithoutWhere),
-            // Style rules
             Box::new(style::SelectStar),
             Box::new(style::MissingTableAlias),
-            // Security rules
             Box::new(security::MissingWhereInUpdate),
             Box::new(security::MissingWhereInDelete),
         ];
-
-        // Filter out disabled rules
         let rules: Vec<Box<dyn Rule>> = all_rules
             .into_iter()
             .filter(|r| {
@@ -212,8 +213,6 @@ impl RuleRunner {
                     .any(|d| d.eq_ignore_ascii_case(r.info().id))
             })
             .collect();
-
-        // Build severity override cache
         let mut severity_cache = std::collections::HashMap::new();
         for rule in &rules {
             let rule_id = rule.info().id;
@@ -223,7 +222,6 @@ impl RuleRunner {
                 severity_cache.insert(rule_id, sev);
             }
         }
-
         Self {
             rules,
             severity_cache
@@ -231,10 +229,13 @@ impl RuleRunner {
     }
 
     /// Create runner with schema-aware rules and configuration
+    ///
+    /// # Notes
+    ///
+    /// - Adds schema-aware rules (SCHEMA001-SCHEMA003) if not disabled
+    /// - Updates severity cache for schema rules
     pub fn with_schema_and_config(schema: Schema, config: RulesConfig) -> Self {
         let mut runner = Self::with_config(config.clone());
-
-        // Add schema-aware rules (if not disabled)
         let schema_rules: Vec<Box<dyn Rule>> = vec![
             Box::new(schema_aware::MissingIndexOnFilterColumn::new(
                 schema.clone()
@@ -242,14 +243,12 @@ impl RuleRunner {
             Box::new(schema_aware::ColumnNotInSchema::new(schema.clone())),
             Box::new(schema_aware::SuggestIndex::new(schema)),
         ];
-
         for rule in schema_rules {
             if !config
                 .disabled
                 .iter()
                 .any(|d| d.eq_ignore_ascii_case(rule.info().id))
             {
-                // Update severity cache for schema rules
                 let rule_id = rule.info().id;
                 if let Some(sev_str) = config.severity.get(rule_id)
                     && let Some(sev) = parse_severity(sev_str)
@@ -259,15 +258,12 @@ impl RuleRunner {
                 runner.rules.push(rule);
             }
         }
-
         runner
     }
 
     /// Run all rules on the provided queries (parallel execution)
     pub fn analyze(&self, queries: &[Query]) -> AnalysisReport {
         let mut report = AnalysisReport::new(queries.len(), self.rules.len());
-
-        // Parallel execution: for each query, run all rules in parallel
         let violations: Vec<Violation> = queries
             .par_iter()
             .enumerate()
@@ -278,22 +274,17 @@ impl RuleRunner {
                     .collect::<Vec<_>>()
             })
             .collect();
-
-        // Apply severity overrides and add to report
         for mut violation in violations {
             if let Some(&severity) = self.severity_cache.get(violation.rule_id) {
                 violation.severity = severity;
             }
             report.add_violation(violation);
         }
-
-        // Sort by severity (errors first) then by query index
         report.violations.sort_by(|a, b| {
             b.severity
                 .cmp(&a.severity)
                 .then_with(|| a.query_index.cmp(&b.query_index))
         });
-
         report
     }
 }

@@ -120,7 +120,6 @@ pub fn calculate_complexity(query: &Query) -> QueryComplexity {
     let window_count = query.window_funcs.len() as u32;
     let subquery_count = if query.has_subquery { 1 } else { 0 };
     let aggregation_count = query.group_cols.len() as u32;
-
     let score = table_count
         + join_count * 3
         + condition_count
@@ -129,7 +128,6 @@ pub fn calculate_complexity(query: &Query) -> QueryComplexity {
         + aggregation_count * 2
         + if query.has_union { 3 } else { 0 }
         + if query.has_distinct { 1 } else { 0 };
-
     QueryComplexity {
         score,
         table_count,

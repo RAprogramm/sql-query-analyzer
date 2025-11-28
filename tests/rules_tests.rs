@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025 RAprogramm
+// SPDX-License-Identifier: MIT
+
 use sql_query_analyzer::{
     config::RulesConfig,
     query::{SqlDialect, parse_queries},
@@ -166,7 +169,6 @@ fn test_rule_disabled() {
     };
     let runner = RuleRunner::with_config(config);
     let report = runner.analyze(&queries);
-
     let rule_ids: Vec<_> = report.violations.iter().map(|v| v.rule_id).collect();
     assert!(!rule_ids.contains(&"PERF001"));
     assert!(!rule_ids.contains(&"PERF011"));
@@ -178,14 +180,12 @@ fn test_severity_override() {
     let queries = parse_queries("SELECT * FROM users", SqlDialect::Generic).unwrap();
     let mut severity = std::collections::HashMap::new();
     severity.insert("STYLE001".to_string(), "error".to_string());
-
     let config = RulesConfig {
         disabled: vec![],
         severity
     };
     let runner = RuleRunner::with_config(config);
     let report = runner.analyze(&queries);
-
     let style_violation = report.violations.iter().find(|v| v.rule_id == "STYLE001");
     assert!(style_violation.is_some());
     assert_eq!(style_violation.unwrap().severity, Severity::Error);
@@ -196,7 +196,6 @@ fn test_error_count() {
     let queries = parse_queries("DELETE FROM users", SqlDialect::Generic).unwrap();
     let runner = RuleRunner::new();
     let report = runner.analyze(&queries);
-
     assert!(report.error_count() > 0);
 }
 
@@ -205,7 +204,6 @@ fn test_warning_count() {
     let queries = parse_queries("SELECT * FROM users", SqlDialect::Generic).unwrap();
     let runner = RuleRunner::new();
     let report = runner.analyze(&queries);
-
     assert!(report.warning_count() > 0);
 }
 
@@ -218,7 +216,6 @@ fn test_no_violations_for_good_query() {
     .unwrap();
     let runner = RuleRunner::new();
     let report = runner.analyze(&queries);
-
     assert_eq!(report.error_count(), 0);
 }
 
@@ -227,7 +224,6 @@ fn test_multiple_violations() {
     let queries = parse_queries("SELECT * FROM users", SqlDialect::Generic).unwrap();
     let runner = RuleRunner::new();
     let report = runner.analyze(&queries);
-
     assert!(report.violations.len() >= 2);
 }
 
@@ -240,7 +236,6 @@ fn test_insert_no_violations() {
     .unwrap();
     let runner = RuleRunner::new();
     let report = runner.analyze(&queries);
-
     assert_eq!(report.error_count(), 0);
     assert_eq!(report.warning_count(), 0);
 }

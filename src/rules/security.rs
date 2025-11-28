@@ -18,7 +18,6 @@ impl Rule for MissingWhereInUpdate {
         if query.query_type != QueryType::Update {
             return vec![];
         }
-
         if query.where_cols.is_empty() {
             let info = self.info();
             return vec![Violation {
@@ -31,7 +30,6 @@ impl Rule for MissingWhereInUpdate {
                 query_index
             }];
         }
-
         vec![]
     }
 }
@@ -53,7 +51,6 @@ impl Rule for MissingWhereInDelete {
         if query.query_type != QueryType::Delete {
             return vec![];
         }
-
         if query.where_cols.is_empty() {
             let info = self.info();
             return vec![Violation {
@@ -66,7 +63,6 @@ impl Rule for MissingWhereInDelete {
                 query_index
             }];
         }
-
         vec![]
     }
 }

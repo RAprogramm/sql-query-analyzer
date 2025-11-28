@@ -34,22 +34,21 @@ impl SqlDialect {
 }
 
 /// Parse multiple SQL queries from string (parallel)
+///
+/// # Notes
+///
+/// - Parses statements in parallel for better performance
 pub fn parse_queries(sql: &str, dialect: SqlDialect) -> AppResult<Vec<Query>> {
     let parser_dialect = dialect.into_parser_dialect();
     let statements = Parser::parse_sql(parser_dialect.as_ref(), sql)
         .map_err(|e| query_parse_error(e.to_string()))?;
-
-    // Parse statements in parallel for better performance
     let queries: Result<Vec<_>, _> = statements.into_par_iter().map(parse_statement).collect();
-
     queries
 }
 
 fn parse_statement(stmt: sqlparser::ast::Statement) -> AppResult<Query> {
     use sqlparser::ast::Statement;
-
     let raw = stmt.to_string();
-
     match stmt {
         Statement::Query(query) => parse_select_query(raw, *query),
         Statement::Insert(insert) => {
@@ -64,30 +63,25 @@ fn parse_statement(stmt: sqlparser::ast::Statement) -> AppResult<Query> {
         } => {
             let mut q = Query::new(raw, QueryType::Update);
             q.tables.push(table.relation.to_string().into());
-
             if let Some(sel) = selection {
                 let mut cols = IndexSet::new();
                 extract_columns_from_expr(&sel, &mut cols);
                 q.where_cols = cols.into_iter().collect();
             }
-
             Ok(q)
         }
         Statement::Delete(delete) => {
             let mut q = Query::new(raw, QueryType::Delete);
-
             if let Some(sel) = delete.selection {
                 let mut cols = IndexSet::new();
                 extract_columns_from_expr(&sel, &mut cols);
                 q.where_cols = cols.into_iter().collect();
             }
-
             if let sqlparser::ast::FromTable::WithFromKeyword(from_items) = delete.from {
                 for item in from_items {
                     q.tables.push(item.relation.to_string().into());
                 }
             }
-
             Ok(q)
         }
         _ => Ok(Query::new(raw, QueryType::Other))
@@ -96,8 +90,6 @@ fn parse_statement(stmt: sqlparser::ast::Statement) -> AppResult<Query> {
 
 fn parse_select_query(raw: String, query: sqlparser::ast::Query) -> AppResult<Query> {
     let mut q = Query::new(raw, QueryType::Select);
-
-    // Extract CTEs
     for cte in &query
         .with
         .iter()
@@ -106,8 +98,6 @@ fn parse_select_query(raw: String, query: sqlparser::ast::Query) -> AppResult<Qu
     {
         q.cte_names.push(cte.alias.name.value.as_str().into());
     }
-
-    // Extract LIMIT/OFFSET
     if let Some(limit_clause) = &query.limit_clause {
         match limit_clause {
             sqlparser::ast::LimitClause::LimitOffset {
@@ -145,8 +135,6 @@ fn parse_select_query(raw: String, query: sqlparser::ast::Query) -> AppResult<Qu
             }
         }
     }
-
-    // Extract ORDER BY columns
     if let Some(order_by) = &query.order_by
         && let sqlparser::ast::OrderByKind::Expressions(exprs) = &order_by.kind
     {
@@ -156,15 +144,12 @@ fn parse_select_query(raw: String, query: sqlparser::ast::Query) -> AppResult<Qu
         }
         q.order_cols = cols.into_iter().collect();
     }
-
-    // Process the query body
     let mut tables = IndexSet::new();
     let mut where_cols = IndexSet::new();
     let mut join_cols = IndexSet::new();
     let mut group_cols = IndexSet::new();
     let mut having_cols = IndexSet::new();
     let mut window_funcs = Vec::new();
-
     let mut ctx = ExtractionContext {
         tables:       &mut tables,
         where_cols:   &mut where_cols,
@@ -176,15 +161,12 @@ fn parse_select_query(raw: String, query: sqlparser::ast::Query) -> AppResult<Qu
         has_distinct: &mut q.has_distinct,
         has_subquery: &mut q.has_subquery
     };
-
     extract_from_set_expr(&query.body, &mut ctx);
-
     q.tables = tables.into_iter().collect();
     q.where_cols = where_cols.into_iter().collect();
     q.join_cols = join_cols.into_iter().collect();
     q.group_cols = group_cols.into_iter().collect();
     q.having_cols = having_cols.into_iter().collect();
     q.window_funcs = window_funcs;
-
     Ok(q)
 }

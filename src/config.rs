@@ -119,14 +119,11 @@ impl Config {
     /// 4. Default values
     pub fn load() -> AppResult<Self> {
         let mut config = Self::default();
-
-        // Try to load from home directory config
         if let Some(home) = env::var_os("HOME") {
             let home_config = PathBuf::from(home)
                 .join(".config")
                 .join("sql-analyzer")
                 .join("config.toml");
-
             if home_config.exists() {
                 let content = fs::read_to_string(&home_config)
                     .map_err(|e| config_error(format!("Failed to read config file: {}", e)))?;
@@ -134,8 +131,6 @@ impl Config {
                     .map_err(|e| config_error(format!("Invalid config file: {}", e)))?;
             }
         }
-
-        // Try to load from current directory config (overrides home config)
         let local_config = PathBuf::from(".sql-analyzer.toml");
         if local_config.exists() {
             let content = fs::read_to_string(&local_config)
@@ -143,24 +138,18 @@ impl Config {
             config = toml::from_str(&content)
                 .map_err(|e| config_error(format!("Invalid config file: {}", e)))?;
         }
-
-        // Override with environment variables
         if let Ok(api_key) = env::var("LLM_API_KEY") {
             config.llm.api_key = Some(api_key);
         }
-
         if let Ok(provider) = env::var("LLM_PROVIDER") {
             config.llm.provider = Some(provider);
         }
-
         if let Ok(model) = env::var("LLM_MODEL") {
             config.llm.model = Some(model);
         }
-
         if let Ok(url) = env::var("OLLAMA_URL") {
             config.llm.ollama_url = Some(url);
         }
-
         Ok(config)
     }
 }

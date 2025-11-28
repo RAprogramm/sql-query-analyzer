@@ -18,13 +18,10 @@ impl Rule for ScalarSubquery {
         if query.query_type != QueryType::Select {
             return vec![];
         }
-
-        // Check for subquery pattern in SELECT clause (before FROM)
         let upper = query.raw.to_uppercase();
         if let Some(from_pos) = upper.find(" FROM ") {
             let select_part = &upper[..from_pos];
             if select_part.contains("SELECT") && select_part.matches('(').count() > 0 {
-                // Likely has subquery in SELECT
                 if query.has_subquery {
                     let info = self.info();
                     return vec![Violation {
@@ -39,7 +36,6 @@ impl Rule for ScalarSubquery {
                 }
             }
         }
-
         vec![]
     }
 }
@@ -59,8 +55,6 @@ impl Rule for FunctionOnColumn {
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
         let upper = query.raw.to_uppercase();
-
-        // Common functions that prevent index usage
         let patterns = [
             "WHERE YEAR(",
             "WHERE MONTH(",
@@ -74,7 +68,6 @@ impl Rule for FunctionOnColumn {
             "WHERE CONVERT(",
             "WHERE COALESCE("
         ];
-
         for pattern in patterns {
             if upper.contains(pattern) {
                 let info = self.info();
@@ -91,7 +84,6 @@ impl Rule for FunctionOnColumn {
                 }];
             }
         }
-
         vec![]
     }
 }
@@ -111,7 +103,6 @@ impl Rule for NotInWithSubquery {
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
         let upper = query.raw.to_uppercase();
-
         if upper.contains("NOT IN") && upper.contains("SELECT") {
             let info = self.info();
             return vec![Violation {
@@ -125,7 +116,6 @@ impl Rule for NotInWithSubquery {
                 query_index
             }];
         }
-
         vec![]
     }
 }
@@ -147,10 +137,7 @@ impl Rule for UnionWithoutAll {
         if !query.has_union {
             return vec![];
         }
-
         let upper = query.raw.to_uppercase();
-
-        // Check if UNION exists without ALL
         if upper.contains(" UNION ") && !upper.contains(" UNION ALL ") {
             let info = self.info();
             return vec![Violation {
@@ -163,7 +150,6 @@ impl Rule for UnionWithoutAll {
                 query_index
             }];
         }
-
         vec![]
     }
 }
@@ -185,7 +171,6 @@ impl Rule for SelectWithoutWhere {
         if query.query_type != QueryType::Select {
             return vec![];
         }
-
         if query.where_cols.is_empty() && query.limit.is_none() && !query.tables.is_empty() {
             let info = self.info();
             return vec![Violation {
@@ -198,7 +183,6 @@ impl Rule for SelectWithoutWhere {
                 query_index
             }];
         }
-
         vec![]
     }
 }
@@ -220,10 +204,8 @@ impl Rule for SelectStarWithoutLimit {
         if query.query_type != QueryType::Select {
             return vec![];
         }
-
         let has_star = query.raw.to_uppercase().contains("SELECT *")
             || query.raw.to_uppercase().contains("SELECT  *");
-
         if has_star && query.limit.is_none() {
             let info = self.info();
             return vec![Violation {
@@ -236,7 +218,6 @@ impl Rule for SelectStarWithoutLimit {
                 query_index
             }];
         }
-
         vec![]
     }
 }
@@ -256,8 +237,6 @@ impl Rule for LeadingWildcard {
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
         let upper = query.raw.to_uppercase();
-
-        // Check for LIKE '%...
         if upper.contains("LIKE '%") || upper.contains("LIKE \"%") {
             let info = self.info();
             return vec![Violation {
@@ -270,7 +249,6 @@ impl Rule for LeadingWildcard {
                 query_index
             }];
         }
-
         vec![]
     }
 }
@@ -290,10 +268,7 @@ impl Rule for OrInsteadOfIn {
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
         let upper = query.raw.to_uppercase();
-
-        // Simple heuristic: count OR occurrences
         let or_count = upper.matches(" OR ").count();
-
         if or_count >= 3 {
             let info = self.info();
             return vec![Violation {
@@ -311,7 +286,6 @@ impl Rule for OrInsteadOfIn {
                 query_index
             }];
         }
-
         vec![]
     }
 }
@@ -347,7 +321,6 @@ impl Rule for LargeOffset {
                 query_index
             }];
         }
-
         vec![]
     }
 }
@@ -369,11 +342,8 @@ impl Rule for MissingJoinCondition {
         if query.query_type != QueryType::Select {
             return vec![];
         }
-
-        // Multiple tables but no join columns and no where columns
         let table_count = query.tables.len();
         let has_conditions = !query.join_cols.is_empty() || !query.where_cols.is_empty();
-
         if table_count > 1 && !has_conditions {
             let info = self.info();
             return vec![Violation {
@@ -391,7 +361,6 @@ impl Rule for MissingJoinCondition {
                 query_index
             }];
         }
-
         vec![]
     }
 }
@@ -424,7 +393,6 @@ impl Rule for DistinctWithOrderBy {
                 query_index
             }];
         }
-
         vec![]
     }
 }
