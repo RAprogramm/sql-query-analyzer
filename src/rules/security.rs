@@ -77,6 +77,52 @@ impl Rule for MissingWhereInUpdate {
     }
 }
 
+/// Detects DROP TABLE/DATABASE statements which permanently destroy data
+///
+/// DROP operations are irreversible and catastrophic:
+/// - Permanent data loss with no undo after commit
+/// - Entire table structure is removed
+/// - Cascading effects on foreign keys, views, and stored procedures
+pub struct DropDetected;
+
+impl Rule for DropDetected {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "SEC004",
+            name:     "DROP statement detected",
+            severity: Severity::Error,
+            category: RuleCategory::Security
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        if query.query_type != QueryType::Drop {
+            return vec![];
+        }
+        let info = self.info();
+        let object_type = query
+            .cte_names
+            .first()
+            .map(|s| s.as_str())
+            .unwrap_or("object");
+        let names = query.tables.join(", ");
+        vec![Violation {
+            rule_id: info.id,
+            rule_name: info.name,
+            message: format!(
+                "DROP {} '{}' permanently destroys data and schema",
+                object_type, names
+            ),
+            severity: info.severity,
+            category: info.category,
+            suggestion: Some(
+                "Ensure this is intentional and backups exist before dropping".to_string()
+            ),
+            query_index
+        }]
+    }
+}
+
 /// DELETE without WHERE affects all rows
 pub struct MissingWhereInDelete;
 

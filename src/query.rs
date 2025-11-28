@@ -93,6 +93,19 @@ fn parse_statement(stmt: sqlparser::ast::Statement) -> AppResult<Query> {
             }
             Ok(q)
         }
+        Statement::Drop {
+            names,
+            object_type,
+            ..
+        } => {
+            let mut q = Query::new(raw, QueryType::Drop);
+            for name in names {
+                q.tables.push(name.to_string().into());
+            }
+            q.cte_names
+                .push(format!("{:?}", object_type).to_lowercase().into());
+            Ok(q)
+        }
         _ => Ok(Query::new(raw, QueryType::Other))
     }
 }
