@@ -111,3 +111,124 @@ fn test_empty_schema() {
     let schema = Schema::parse(sql).unwrap();
     assert!(schema.tables.is_empty());
 }
+
+#[test]
+fn test_schema_debug() {
+    let sql = "CREATE TABLE users (id INT PRIMARY KEY)";
+    let schema = Schema::parse(sql).unwrap();
+    let debug = format!("{:?}", schema);
+    assert!(debug.contains("Schema"));
+}
+
+#[test]
+fn test_schema_clone() {
+    let sql = "CREATE TABLE users (id INT PRIMARY KEY)";
+    let schema = Schema::parse(sql).unwrap();
+    let cloned = schema.clone();
+    assert_eq!(cloned.tables.len(), schema.tables.len());
+}
+
+#[test]
+fn test_schema_default() {
+    let schema = Schema::default();
+    assert!(schema.tables.is_empty());
+}
+
+#[test]
+fn test_parse_insert_statement() {
+    let sql = r#"
+        CREATE TABLE users (id INT PRIMARY KEY);
+        INSERT INTO users VALUES (1);
+    "#;
+    let schema = Schema::parse(sql).unwrap();
+    assert_eq!(schema.tables.len(), 1);
+}
+
+#[test]
+fn test_parse_with_default_value() {
+    let sql = "CREATE TABLE users (id INT DEFAULT 0, status VARCHAR(50) DEFAULT 'active')";
+    let schema = Schema::parse(sql).unwrap();
+    let users = &schema.tables["users"];
+    assert_eq!(users.columns.len(), 2);
+}
+
+#[test]
+fn test_schema_to_summary_with_index() {
+    let sql = r#"
+        CREATE TABLE users (id INT PRIMARY KEY, email VARCHAR(255));
+        CREATE INDEX idx_email ON users(email);
+    "#;
+    let schema = Schema::parse(sql).unwrap();
+    let summary = schema.to_summary();
+    assert!(summary.contains("idx_email"));
+    assert!(summary.contains("email"));
+}
+
+#[test]
+fn test_schema_to_summary_with_unique_index() {
+    let sql = r#"
+        CREATE TABLE users (id INT PRIMARY KEY, email VARCHAR(255));
+        CREATE UNIQUE INDEX idx_email ON users(email);
+    "#;
+    let schema = Schema::parse(sql).unwrap();
+    let summary = schema.to_summary();
+    assert!(summary.contains("UNIQUE"));
+}
+
+#[test]
+fn test_parse_auto_increment() {
+    let sql = "CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY)";
+    let schema = Schema::parse(sql).unwrap();
+    let users = &schema.tables["users"];
+    assert_eq!(users.columns.len(), 1);
+}
+
+#[test]
+fn test_parse_serial() {
+    let sql = "CREATE TABLE users (id SERIAL PRIMARY KEY)";
+    let schema = Schema::parse(sql).unwrap();
+    let users = &schema.tables["users"];
+    assert_eq!(users.columns.len(), 1);
+}
+
+#[test]
+fn test_table_info_debug() {
+    let sql = "CREATE TABLE users (id INT PRIMARY KEY)";
+    let schema = Schema::parse(sql).unwrap();
+    let users = &schema.tables["users"];
+    let debug = format!("{:?}", users);
+    assert!(debug.contains("TableInfo"));
+}
+
+#[test]
+fn test_column_info_debug() {
+    use sql_query_analyzer::schema::ColumnInfo;
+    let col = ColumnInfo {
+        name:        "test".to_string(),
+        data_type:   "INT".to_string(),
+        is_nullable: true,
+        is_primary:  false
+    };
+    let debug = format!("{:?}", col);
+    assert!(debug.contains("test"));
+}
+
+#[test]
+fn test_index_info_debug() {
+    use sql_query_analyzer::schema::IndexInfo;
+    let idx = IndexInfo {
+        name:      "idx_test".to_string(),
+        columns:   vec!["col1".to_string()],
+        is_unique: false
+    };
+    let debug = format!("{:?}", idx);
+    assert!(debug.contains("idx_test"));
+}
+
+#[test]
+fn test_parse_nullable_column() {
+    let sql = "CREATE TABLE users (id INT, name VARCHAR(255) NULL)";
+    let schema = Schema::parse(sql).unwrap();
+    let users = &schema.tables["users"];
+    assert!(users.columns[1].is_nullable);
+}

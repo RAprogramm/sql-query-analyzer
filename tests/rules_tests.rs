@@ -239,3 +239,147 @@ fn test_insert_no_violations() {
     assert_eq!(report.error_count(), 0);
     assert_eq!(report.warning_count(), 0);
 }
+
+#[test]
+fn test_scalar_subquery() {
+    let violations = analyze_query(
+        "SELECT id, (SELECT COUNT(*) FROM orders WHERE orders.user_id = users.id) FROM users LIMIT 10"
+    );
+    assert!(violations.contains(&"PERF007".to_string()));
+}
+
+#[test]
+fn test_function_on_column_year() {
+    let violations = analyze_query("SELECT * FROM orders WHERE YEAR(created_at) = 2024 LIMIT 10");
+    assert!(violations.contains(&"PERF008".to_string()));
+}
+
+#[test]
+fn test_function_on_column_upper() {
+    let violations = analyze_query("SELECT * FROM users WHERE UPPER(name) = 'JOHN' LIMIT 10");
+    assert!(violations.contains(&"PERF008".to_string()));
+}
+
+#[test]
+fn test_function_on_column_lower() {
+    let violations =
+        analyze_query("SELECT * FROM users WHERE LOWER(email) = 'test@test.com' LIMIT 10");
+    assert!(violations.contains(&"PERF008".to_string()));
+}
+
+#[test]
+fn test_function_on_column_trim() {
+    let violations = analyze_query("SELECT * FROM users WHERE TRIM(name) = 'John' LIMIT 10");
+    assert!(violations.contains(&"PERF008".to_string()));
+}
+
+#[test]
+fn test_function_on_column_cast() {
+    let violations = analyze_query("SELECT * FROM users WHERE CAST(id AS VARCHAR) = '1' LIMIT 10");
+    assert!(violations.contains(&"PERF008".to_string()));
+}
+
+#[test]
+fn test_function_on_column_coalesce() {
+    let violations =
+        analyze_query("SELECT * FROM users WHERE COALESCE(status, 'unknown') = 'active' LIMIT 10");
+    assert!(violations.contains(&"PERF008".to_string()));
+}
+
+#[test]
+fn test_not_in_with_subquery() {
+    let violations =
+        analyze_query("SELECT * FROM users WHERE id NOT IN (SELECT user_id FROM banned) LIMIT 10");
+    assert!(violations.contains(&"PERF009".to_string()));
+}
+
+#[test]
+fn test_or_instead_of_in() {
+    let violations = analyze_query(
+        "SELECT * FROM users WHERE status = 'a' OR status = 'b' OR status = 'c' OR status = 'd' LIMIT 10"
+    );
+    assert!(violations.contains(&"PERF003".to_string()));
+}
+
+#[test]
+fn test_cartesian_product() {
+    let violations = analyze_query("SELECT * FROM users, orders LIMIT 10");
+    assert!(violations.contains(&"PERF005".to_string()));
+}
+
+#[test]
+fn test_cartesian_product_with_where() {
+    let violations =
+        analyze_query("SELECT * FROM users, orders WHERE users.id = orders.user_id LIMIT 10");
+    assert!(!violations.contains(&"PERF005".to_string()));
+}
+
+#[test]
+fn test_leading_wildcard_double_quote() {
+    let violations = analyze_query(r#"SELECT * FROM users WHERE name LIKE "%test" LIMIT 10"#);
+    assert!(violations.contains(&"PERF002".to_string()));
+}
+
+#[test]
+fn test_select_star_double_space() {
+    let violations = analyze_query("SELECT  * FROM users");
+    assert!(violations.contains(&"PERF001".to_string()));
+}
+
+#[test]
+fn test_join_missing_alias() {
+    let violations = analyze_query(
+        "SELECT users.id FROM users INNER JOIN orders ON users.id = orders.user_id LIMIT 10"
+    );
+    assert!(violations.contains(&"STYLE002".to_string()));
+}
+
+#[test]
+fn test_schema_join_column_missing_index() {
+    let schema = r#"
+        CREATE TABLE users (id INT PRIMARY KEY);
+        CREATE TABLE orders (id INT PRIMARY KEY, user_id INT);
+    "#;
+    let violations = analyze_with_schema(
+        "SELECT * FROM users u INNER JOIN orders o ON u.id = o.user_id LIMIT 10",
+        schema
+    );
+    assert!(violations.contains(&"SCHEMA001".to_string()));
+}
+
+#[test]
+fn test_schema_order_by_missing_index() {
+    let schema = "CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(255))";
+    let violations = analyze_with_schema("SELECT * FROM users ORDER BY name LIMIT 10", schema);
+    assert!(violations.contains(&"SCHEMA003".to_string()));
+}
+
+#[test]
+fn test_schema_column_not_in_schema() {
+    let schema = "CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(255))";
+    let violations = analyze_with_schema(
+        "SELECT * FROM users WHERE nonexistent_col = 'test' LIMIT 10",
+        schema
+    );
+    assert!(violations.contains(&"SCHEMA002".to_string()));
+}
+
+#[test]
+fn test_schema_large_table_no_index() {
+    let schema = r#"
+        CREATE TABLE users (id INT PRIMARY KEY, email VARCHAR(255));
+        INSERT INTO users VALUES (1, 'a');
+        INSERT INTO users VALUES (2, 'b');
+        INSERT INTO users VALUES (3, 'c');
+    "#;
+    let violations =
+        analyze_with_schema("SELECT * FROM users WHERE email = 'test' LIMIT 10", schema);
+    assert!(violations.contains(&"SCHEMA001".to_string()));
+}
+
+#[test]
+fn test_multiple_queries() {
+    let violations = analyze_query("SELECT * FROM users; DELETE FROM orders");
+    assert!(violations.contains(&"PERF001".to_string()));
+    assert!(violations.contains(&"SEC002".to_string()));
+}

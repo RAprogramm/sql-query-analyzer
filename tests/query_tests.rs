@@ -254,3 +254,186 @@ fn test_sqlite_dialect() {
     let queries = parse_queries(sql, SqlDialect::SQLite).unwrap();
     assert_eq!(queries.len(), 1);
 }
+
+#[test]
+fn test_derived_subquery_with_alias() {
+    let sql = "SELECT t.id FROM (SELECT id FROM users) AS t";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert!(queries[0].tables.iter().any(|t| t.contains("subquery")));
+}
+
+#[test]
+fn test_nested_join() {
+    let sql = "SELECT * FROM (users u INNER JOIN orders o ON u.id = o.user_id)";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+}
+
+#[test]
+fn test_window_function() {
+    let sql =
+        "SELECT id, ROW_NUMBER() OVER (PARTITION BY status ORDER BY created_at) as rn FROM users";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert!(!queries[0].window_funcs.is_empty());
+}
+
+#[test]
+fn test_window_function_dense_rank() {
+    let sql = "SELECT id, DENSE_RANK() OVER (ORDER BY score DESC) as rank FROM players";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert!(!queries[0].window_funcs.is_empty());
+}
+
+#[test]
+fn test_case_expression() {
+    let sql = "SELECT CASE WHEN status = 'active' THEN 1 ELSE 0 END FROM users";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+}
+
+#[test]
+fn test_exists_subquery() {
+    let sql =
+        "SELECT * FROM users WHERE EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert!(queries[0].has_subquery);
+}
+
+#[test]
+fn test_not_in_subquery() {
+    let sql = "SELECT * FROM users WHERE id NOT IN (SELECT user_id FROM banned)";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert!(queries[0].has_subquery);
+}
+
+#[test]
+fn test_scalar_subquery() {
+    let sql = "SELECT id, (SELECT COUNT(*) FROM orders WHERE orders.user_id = users.id) as order_count FROM users";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert!(queries[0].has_subquery);
+}
+
+#[test]
+fn test_right_join() {
+    let sql = "SELECT * FROM users u RIGHT JOIN orders o ON u.id = o.user_id";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert_eq!(queries[0].tables.len(), 2);
+}
+
+#[test]
+fn test_full_outer_join() {
+    let sql = "SELECT * FROM users u FULL OUTER JOIN orders o ON u.id = o.user_id";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert_eq!(queries[0].tables.len(), 2);
+}
+
+#[test]
+fn test_cross_join() {
+    let sql = "SELECT * FROM users CROSS JOIN products";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert_eq!(queries[0].tables.len(), 2);
+}
+
+#[test]
+fn test_union_all() {
+    let sql = "SELECT id FROM users UNION ALL SELECT id FROM admins";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert!(queries[0].has_union);
+}
+
+#[test]
+fn test_intersect() {
+    let sql = "SELECT id FROM users INTERSECT SELECT id FROM premium_users";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+}
+
+#[test]
+fn test_except() {
+    let sql = "SELECT id FROM users EXCEPT SELECT id FROM banned_users";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+}
+
+#[test]
+fn test_coalesce() {
+    let sql = "SELECT COALESCE(name, 'Unknown') FROM users";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+}
+
+#[test]
+fn test_cast() {
+    let sql = "SELECT CAST(id AS VARCHAR) FROM users";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+}
+
+#[test]
+fn test_aggregate_functions() {
+    let sql = "SELECT COUNT(*), SUM(total), AVG(price), MIN(id), MAX(id) FROM orders";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+}
+
+#[test]
+fn test_multiple_ctes() {
+    let sql = "WITH cte1 AS (SELECT 1), cte2 AS (SELECT 2) SELECT * FROM cte1, cte2";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert_eq!(queries[0].cte_names.len(), 2);
+}
+
+#[test]
+fn test_recursive_cte() {
+    let sql = "WITH RECURSIVE nums AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM nums WHERE n < 10) SELECT * FROM nums";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert!(!queries[0].cte_names.is_empty());
+}
+
+#[test]
+fn test_is_null() {
+    let sql = "SELECT * FROM users WHERE email IS NULL";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+}
+
+#[test]
+fn test_is_not_null() {
+    let sql = "SELECT * FROM users WHERE email IS NOT NULL";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+}
+
+#[test]
+fn test_compound_expression() {
+    let sql =
+        "SELECT * FROM users WHERE (status = 'active' OR status = 'pending') AND verified = true";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+}
+
+#[test]
+fn test_negative_number() {
+    let sql = "SELECT * FROM accounts WHERE balance < -100";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+}
+
+#[test]
+fn test_nested_function_calls() {
+    let sql = "SELECT UPPER(TRIM(name)) FROM users";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert_eq!(queries.len(), 1);
+}

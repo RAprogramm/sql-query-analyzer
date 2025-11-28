@@ -46,3 +46,119 @@ fn test_rules_config_with_severity() {
     };
     assert_eq!(config.severity.get("PERF001").unwrap(), "error");
 }
+
+#[test]
+fn test_llm_config_default() {
+    use sql_query_analyzer::config::LlmConfig;
+    let config = LlmConfig::default();
+    assert!(config.provider.is_none());
+    assert!(config.api_key.is_none());
+    assert!(config.model.is_none());
+    assert_eq!(
+        config.ollama_url,
+        Some("http://localhost:11434".to_string())
+    );
+}
+
+#[test]
+fn test_retry_config_default() {
+    use sql_query_analyzer::config::RetryConfig;
+    let config = RetryConfig::default();
+    assert_eq!(config.max_retries, 3);
+    assert_eq!(config.initial_delay_ms, 1000);
+    assert_eq!(config.max_delay_ms, 30000);
+    assert_eq!(config.backoff_factor, 2.0);
+}
+
+#[test]
+fn test_config_load() {
+    let result = Config::load();
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_config_debug() {
+    let config = Config::default();
+    let debug = format!("{:?}", config);
+    assert!(debug.contains("Config"));
+}
+
+#[test]
+fn test_llm_config_debug() {
+    use sql_query_analyzer::config::LlmConfig;
+    let config = LlmConfig::default();
+    let debug = format!("{:?}", config);
+    assert!(debug.contains("LlmConfig"));
+}
+
+#[test]
+fn test_retry_config_debug() {
+    use sql_query_analyzer::config::RetryConfig;
+    let config = RetryConfig::default();
+    let debug = format!("{:?}", config);
+    assert!(debug.contains("RetryConfig"));
+}
+
+#[test]
+fn test_rules_config_debug() {
+    let config = RulesConfig::default();
+    let debug = format!("{:?}", config);
+    assert!(debug.contains("RulesConfig"));
+}
+
+#[test]
+fn test_config_clone() {
+    let config = Config::default();
+    let cloned = config.clone();
+    assert_eq!(cloned.retry.max_retries, config.retry.max_retries);
+}
+
+#[test]
+fn test_llm_config_clone() {
+    use sql_query_analyzer::config::LlmConfig;
+    let config = LlmConfig::default();
+    let cloned = config.clone();
+    assert_eq!(cloned.ollama_url, config.ollama_url);
+}
+
+#[test]
+fn test_retry_config_clone() {
+    use sql_query_analyzer::config::RetryConfig;
+    let config = RetryConfig::default();
+    let cloned = config.clone();
+    assert_eq!(cloned.max_retries, config.max_retries);
+}
+
+#[test]
+fn test_rules_config_clone() {
+    let config = RulesConfig::default();
+    let cloned = config.clone();
+    assert_eq!(cloned.disabled.len(), config.disabled.len());
+}
+
+#[test]
+fn test_config_load_with_env_vars() {
+    unsafe {
+        std::env::set_var("LLM_API_KEY", "test-key-12345");
+        std::env::set_var("LLM_PROVIDER", "openai");
+        std::env::set_var("LLM_MODEL", "gpt-4");
+        std::env::set_var("OLLAMA_URL", "http://custom:11434");
+    }
+
+    let config = Config::load().unwrap();
+
+    assert_eq!(config.llm.api_key, Some("test-key-12345".to_string()));
+    assert_eq!(config.llm.provider, Some("openai".to_string()));
+    assert_eq!(config.llm.model, Some("gpt-4".to_string()));
+    assert_eq!(
+        config.llm.ollama_url,
+        Some("http://custom:11434".to_string())
+    );
+
+    unsafe {
+        std::env::remove_var("LLM_API_KEY");
+        std::env::remove_var("LLM_PROVIDER");
+        std::env::remove_var("LLM_MODEL");
+        std::env::remove_var("OLLAMA_URL");
+    }
+}
