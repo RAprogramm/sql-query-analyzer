@@ -177,45 +177,49 @@ jobs:
       contents: write
     uses: ./.github/workflows/_tag.yml
 
-  # Debug tag outputs
-  debug-outputs:
+  # Check if release should proceed
+  should-release:
     needs: tag
     runs-on: ubuntu-latest
-    if: always()
+    outputs:
+      release: ${{ steps.check.outputs.release }}
+      version: ${{ needs.tag.outputs.version }}
     steps:
-      - run: |
+      - name: Check if new tag
+        id: check
+        run: |
           echo "new_tag='${{ needs.tag.outputs.new_tag }}'"
           echo "version='${{ needs.tag.outputs.version }}'"
           if [ "${{ needs.tag.outputs.new_tag }}" = "true" ]; then
-            echo "NEW TAG DETECTED!"
+            echo "release=true" >> $GITHUB_OUTPUT
           else
-            echo "No new tag"
+            echo "release=false" >> $GITHUB_OUTPUT
           fi
 
   # Stage 7: Release builds (only if new tag)
   release-build:
-    needs: [tag, debug-outputs]
-    if: needs.tag.outputs.new_tag == 'true'
+    needs: should-release
+    if: needs.should-release.outputs.release == 'true'
     uses: ./.github/workflows/_release-build.yml
     with:
-      new_tag: ${{ needs.tag.outputs.new_tag }}
+      new_tag: ${{ needs.should-release.outputs.release }}
 
   # Stage 8: Create release and publish (after release builds)
   release:
-    needs: [tag, release-build]
-    if: needs.tag.outputs.new_tag == 'true'
+    needs: [should-release, release-build]
+    if: needs.should-release.outputs.release == 'true'
     permissions:
       contents: write
     uses: ./.github/workflows/_release.yml
     with:
-      new_tag: ${{ needs.tag.outputs.new_tag }}
-      version: ${{ needs.tag.outputs.version }}
+      new_tag: ${{ needs.should-release.outputs.release }}
+      version: ${{ needs.should-release.outputs.version }}
 
   publish:
-    needs: [tag, release-build]
-    if: needs.tag.outputs.new_tag == 'true'
+    needs: [should-release, release-build]
+    if: needs.should-release.outputs.release == 'true'
     uses: ./.github/workflows/_publish.yml
     with:
-      new_tag: ${{ needs.tag.outputs.new_tag }}
+      new_tag: ${{ needs.should-release.outputs.release }}
     secrets:
       CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
