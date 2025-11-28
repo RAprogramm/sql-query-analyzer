@@ -18,35 +18,47 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
-  # Stage 1: Detect changes
+  # Stage 1: PR size check (blocks everything on failure)
+  pr-size:
+    name: PR Size Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: RAprogramm/rust-prod-diff-checker@v1
+        with:
+          max-lines: 200
+          format: comment
+          post-comment: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Stage 2: Detect changes
   detect:
+    needs: pr-size
+    if: always() && (needs.pr-size.result == 'success' || needs.pr-size.result == 'skipped')
     uses: ./.github/workflows/_detect.yml
 
-  # Stage 2: PR size check (blocks other checks on failure)
-  pr-size:
-    needs: detect
-    uses: ./.github/workflows/_pr-size.yml
-    with:
-      rust_changed: ${{ needs.detect.outputs.rust }}
-
-  # Stage 3: Linting (parallel)
+  # Stage 3: All checks (parallel)
   fmt:
-    needs: [detect, pr-size]
-    if: always() && (needs.pr-size.result == 'success' || needs.pr-size.result == 'skipped')
+    needs: detect
+    if: needs.detect.outputs.rust == 'true'
     uses: ./.github/workflows/_fmt.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
   clippy:
     needs: detect
+    if: needs.detect.outputs.rust == 'true'
     uses: ./.github/workflows/_clippy.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
-  # Stage 4: Quality and tests (after linting)
   qual:
-    needs: [detect, fmt, clippy]
-    if: always() && (needs.fmt.result == 'success' || needs.fmt.result == 'skipped') && (needs.clippy.result == 'success' || needs.clippy.result == 'skipped')
+    needs: detect
+    if: needs.detect.outputs.rust == 'true'
     permissions:
       contents: read
       pull-requests: write
@@ -55,8 +67,8 @@ jobs:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
   test:
-    needs: [detect, fmt, clippy]
-    if: always() && (needs.fmt.result == 'success' || needs.fmt.result == 'skipped') && (needs.clippy.result == 'success' || needs.clippy.result == 'skipped')
+    needs: detect
+    if: needs.detect.outputs.rust == 'true'
     uses: ./.github/workflows/_test.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
@@ -64,86 +76,91 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   doc:
-    needs: [detect, fmt, clippy]
-    if: always() && (needs.fmt.result == 'success' || needs.fmt.result == 'skipped') && (needs.clippy.result == 'success' || needs.clippy.result == 'skipped')
+    needs: detect
+    if: needs.detect.outputs.rust == 'true'
     uses: ./.github/workflows/_doc.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
   doctest:
-    needs: [detect, fmt, clippy]
-    if: always() && (needs.fmt.result == 'success' || needs.fmt.result == 'skipped') && (needs.clippy.result == 'success' || needs.clippy.result == 'skipped')
+    needs: detect
+    if: needs.detect.outputs.rust == 'true'
     uses: ./.github/workflows/_doctest.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
-  # Stage 4: Security and compliance (parallel with tests)
   audit:
     needs: detect
+    if: needs.detect.outputs.deps == 'true'
     uses: ./.github/workflows/_audit.yml
     with:
       deps_changed: ${{ needs.detect.outputs.deps }}
 
   deny:
     needs: detect
+    if: needs.detect.outputs.deps == 'true'
     uses: ./.github/workflows/_deny.yml
     with:
       deps_changed: ${{ needs.detect.outputs.deps }}
 
   reuse:
     needs: detect
+    if: needs.detect.outputs.reuse == 'true'
     uses: ./.github/workflows/_reuse.yml
     with:
       reuse_changed: ${{ needs.detect.outputs.reuse }}
 
-  # Stage 4: Compatibility checks (parallel with tests)
   msrv:
-    needs: [detect, fmt]
-    if: always() && (needs.fmt.result == 'success' || needs.fmt.result == 'skipped')
+    needs: detect
+    if: needs.detect.outputs.rust == 'true'
     uses: ./.github/workflows/_msrv.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
   semver:
-    needs: [detect, fmt, clippy]
-    if: always() && (needs.fmt.result == 'success' || needs.fmt.result == 'skipped') && (needs.clippy.result == 'success' || needs.clippy.result == 'skipped')
+    needs: detect
+    if: github.event_name == 'pull_request' && needs.detect.outputs.rust == 'true'
     uses: ./.github/workflows/_semver.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
   machete:
-    needs: [detect, fmt]
-    if: always() && (needs.fmt.result == 'success' || needs.fmt.result == 'skipped')
+    needs: detect
+    if: needs.detect.outputs.deps == 'true'
     uses: ./.github/workflows/_machete.yml
     with:
       deps_changed: ${{ needs.detect.outputs.deps }}
 
-  # Stage 5: Build (after all checks pass)
+  # Stage 4: Build (after all checks pass)
   build:
-    needs: [detect, test, doc, audit, deny, reuse, msrv, machete, doctest, qual]
+    needs: [detect, fmt, clippy, qual, test, doc, doctest, audit, deny, reuse, msrv, machete]
     if: |
       always() &&
       needs.detect.outputs.rust == 'true' &&
+      (needs.fmt.result == 'success' || needs.fmt.result == 'skipped') &&
+      (needs.clippy.result == 'success' || needs.clippy.result == 'skipped') &&
+      (needs.qual.result == 'success' || needs.qual.result == 'skipped') &&
       (needs.test.result == 'success' || needs.test.result == 'skipped') &&
       (needs.doc.result == 'success' || needs.doc.result == 'skipped') &&
+      (needs.doctest.result == 'success' || needs.doctest.result == 'skipped') &&
       (needs.audit.result == 'success' || needs.audit.result == 'skipped') &&
       (needs.deny.result == 'success' || needs.deny.result == 'skipped') &&
       (needs.reuse.result == 'success' || needs.reuse.result == 'skipped') &&
       (needs.msrv.result == 'success' || needs.msrv.result == 'skipped') &&
-      (needs.machete.result == 'success' || needs.machete.result == 'skipped') &&
-      (needs.doctest.result == 'success' || needs.doctest.result == 'skipped') &&
-      (needs.qual.result == 'success' || needs.qual.result == 'skipped')
+      (needs.machete.result == 'success' || needs.machete.result == 'skipped')
     uses: ./.github/workflows/_build.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
-  # Stage 6: Changelog (only on main after build)
+  # Stage 5: Changelog (only on main after build)
   changelog:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.result == 'success'
+    permissions:
+      contents: write
     uses: ./.github/workflows/_changelog.yml
 
-  # Stage 7: Tag release (after changelog)
+  # Stage 6: Tag release (after changelog)
   tag:
     needs: [build, changelog]
     if: |
@@ -152,18 +169,24 @@ jobs:
       github.ref == 'refs/heads/main' &&
       needs.build.result == 'success' &&
       (needs.changelog.result == 'success' || needs.changelog.result == 'skipped')
+    permissions:
+      contents: write
     uses: ./.github/workflows/_tag.yml
 
-  # Stage 8: Release builds (only if new tag)
+  # Stage 7: Release builds (only if new tag)
   release-build:
     needs: tag
+    if: needs.tag.outputs.new_tag == 'true'
     uses: ./.github/workflows/_release-build.yml
     with:
       new_tag: ${{ needs.tag.outputs.new_tag }}
 
-  # Stage 9: Create release and publish (after release builds)
+  # Stage 8: Create release and publish (after release builds)
   release:
     needs: [tag, release-build]
+    if: needs.tag.outputs.new_tag == 'true'
+    permissions:
+      contents: write
     uses: ./.github/workflows/_release.yml
     with:
       new_tag: ${{ needs.tag.outputs.new_tag }}
@@ -171,6 +194,7 @@ jobs:
 
   publish:
     needs: [tag, release-build]
+    if: needs.tag.outputs.new_tag == 'true'
     uses: ./.github/workflows/_publish.yml
     with:
       new_tag: ${{ needs.tag.outputs.new_tag }}
