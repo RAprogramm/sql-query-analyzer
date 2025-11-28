@@ -50,21 +50,21 @@ jobs:
   # Stage 3: All checks (parallel)
   fmt:
     needs: detect
-    if: needs.detect.outputs.rust == 'true'
+    if: always() && needs.detect.result == 'success' && needs.detect.outputs.rust == 'true'
     uses: ./.github/workflows/_fmt.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
   clippy:
     needs: detect
-    if: needs.detect.outputs.rust == 'true'
+    if: always() && needs.detect.result == 'success' && needs.detect.outputs.rust == 'true'
     uses: ./.github/workflows/_clippy.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
   qual:
     needs: detect
-    if: needs.detect.outputs.rust == 'true'
+    if: always() && needs.detect.result == 'success' && needs.detect.outputs.rust == 'true'
     permissions:
       contents: read
       pull-requests: write
@@ -74,7 +74,7 @@ jobs:
 
   test:
     needs: detect
-    if: needs.detect.outputs.rust == 'true'
+    if: always() && needs.detect.result == 'success' && needs.detect.outputs.rust == 'true'
     uses: ./.github/workflows/_test.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
@@ -83,56 +83,56 @@ jobs:
 
   doc:
     needs: detect
-    if: needs.detect.outputs.rust == 'true'
+    if: always() && needs.detect.result == 'success' && needs.detect.outputs.rust == 'true'
     uses: ./.github/workflows/_doc.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
   doctest:
     needs: detect
-    if: needs.detect.outputs.rust == 'true'
+    if: always() && needs.detect.result == 'success' && needs.detect.outputs.rust == 'true'
     uses: ./.github/workflows/_doctest.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
   audit:
     needs: detect
-    if: needs.detect.outputs.deps == 'true'
+    if: always() && needs.detect.result == 'success' && needs.detect.outputs.deps == 'true'
     uses: ./.github/workflows/_audit.yml
     with:
       deps_changed: ${{ needs.detect.outputs.deps }}
 
   deny:
     needs: detect
-    if: needs.detect.outputs.deps == 'true'
+    if: always() && needs.detect.result == 'success' && needs.detect.outputs.deps == 'true'
     uses: ./.github/workflows/_deny.yml
     with:
       deps_changed: ${{ needs.detect.outputs.deps }}
 
   reuse:
     needs: detect
-    if: needs.detect.outputs.reuse == 'true'
+    if: always() && needs.detect.result == 'success' && needs.detect.outputs.reuse == 'true'
     uses: ./.github/workflows/_reuse.yml
     with:
       reuse_changed: ${{ needs.detect.outputs.reuse }}
 
   msrv:
     needs: detect
-    if: needs.detect.outputs.rust == 'true'
+    if: always() && needs.detect.result == 'success' && needs.detect.outputs.rust == 'true'
     uses: ./.github/workflows/_msrv.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
   semver:
     needs: detect
-    if: github.event_name == 'pull_request' && needs.detect.outputs.rust == 'true'
+    if: always() && needs.detect.result == 'success' && github.event_name == 'pull_request' && needs.detect.outputs.rust == 'true'
     uses: ./.github/workflows/_semver.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
   machete:
     needs: detect
-    if: needs.detect.outputs.deps == 'true'
+    if: always() && needs.detect.result == 'success' && needs.detect.outputs.deps == 'true'
     uses: ./.github/workflows/_machete.yml
     with:
       deps_changed: ${{ needs.detect.outputs.deps }}
@@ -142,6 +142,7 @@ jobs:
     needs: [detect, fmt, clippy, qual, test, doc, doctest, audit, deny, reuse, msrv, machete]
     if: |
       always() &&
+      needs.detect.result == 'success' &&
       needs.detect.outputs.rust == 'true' &&
       (needs.fmt.result == 'success' || needs.fmt.result == 'skipped') &&
       (needs.clippy.result == 'success' || needs.clippy.result == 'skipped') &&
