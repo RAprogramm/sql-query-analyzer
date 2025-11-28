@@ -17,7 +17,6 @@ jobs:
   tag-release:
     name: Create Version Tag
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
       new_tag: ${{ steps.check.outputs.new_tag }}
       version: ${{ steps.check.outputs.version }}
