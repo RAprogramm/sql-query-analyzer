@@ -17,7 +17,6 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    if: inputs.new_tag == 'true'
     steps:
       - uses: actions/checkout@v6
         with:

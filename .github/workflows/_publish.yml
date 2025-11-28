@@ -17,7 +17,6 @@ jobs:
   publish:
     name: Publish to crates.io
     runs-on: ubuntu-latest
-    if: inputs.new_tag == 'true'
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable

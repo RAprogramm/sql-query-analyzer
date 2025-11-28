@@ -14,7 +14,6 @@ jobs:
   release-build:
     name: Release Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
-    if: inputs.new_tag == 'true'
     strategy:
       fail-fast: false
       matrix:
