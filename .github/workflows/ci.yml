@@ -200,7 +200,7 @@ jobs:
   # Stage 7: Release builds (only if new tag)
   release-build:
     needs: should-release
-    if: needs.should-release.outputs.release == 'true'
+    if: always() && needs.should-release.result == 'success' && needs.should-release.outputs.release == 'true'
     uses: ./.github/workflows/_release-build.yml
     with:
       new_tag: ${{ needs.should-release.outputs.release }}
@@ -208,7 +208,7 @@ jobs:
   # Stage 8: Create release and publish (after release builds)
   release:
     needs: [should-release, release-build]
-    if: needs.should-release.outputs.release == 'true'
+    if: always() && needs.should-release.result == 'success' && needs.should-release.outputs.release == 'true' && needs.release-build.result == 'success'
     permissions:
       contents: write
     uses: ./.github/workflows/_release.yml
@@ -218,7 +218,7 @@ jobs:
 
   publish:
     needs: [should-release, release-build]
-    if: needs.should-release.outputs.release == 'true'
+    if: always() && needs.should-release.result == 'success' && needs.should-release.outputs.release == 'true' && needs.release-build.result == 'success'
     uses: ./.github/workflows/_publish.yml
     with:
       new_tag: ${{ needs.should-release.outputs.release }}
