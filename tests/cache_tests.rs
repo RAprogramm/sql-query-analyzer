@@ -43,8 +43,6 @@ fn test_query_cache_eviction() {
     cache.insert("SELECT 3", q3);
     cache.insert("SELECT 4", q4);
 
-    // After eviction, cache size should be reduced
-    // Some entries should be evicted
     let cached4 = cache.get("SELECT 4");
     assert!(cached4.is_some());
 }
