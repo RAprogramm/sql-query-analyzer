@@ -84,7 +84,8 @@ pub enum Dialect {
     Generic,
     Mysql,
     Postgresql,
-    Sqlite
+    Sqlite,
+    Clickhouse
 }
 
 #[derive(Debug, Clone, ValueEnum)]
