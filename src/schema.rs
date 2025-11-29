@@ -43,11 +43,21 @@ use crate::error::{AppResult, schema_parse_error};
 #[derive(Debug, Clone)]
 pub struct TableInfo {
     /// Table name
-    pub name:    String,
+    pub name:         String,
     /// Ordered list of columns
-    pub columns: Vec<ColumnInfo>,
+    pub columns:      Vec<ColumnInfo>,
     /// Indexes defined on this table
-    pub indexes: Vec<IndexInfo>
+    pub indexes:      Vec<IndexInfo>,
+    /// Storage engine (ClickHouse: MergeTree, ReplicatedMergeTree, etc.)
+    pub engine:       Option<String>,
+    /// Physical sort order columns (ClickHouse ORDER BY)
+    pub order_by:     Option<Vec<String>>,
+    /// Sparse index columns (ClickHouse PRIMARY KEY)
+    pub primary_key:  Option<Vec<String>>,
+    /// Partitioning expression (ClickHouse PARTITION BY)
+    pub partition_by: Option<String>,
+    /// Cluster name (ClickHouse ON CLUSTER)
+    pub cluster:      Option<String>
 }
 
 /// Column metadata extracted from CREATE TABLE.
@@ -153,7 +163,12 @@ impl Schema {
                     TableInfo {
                         name: table_name,
                         columns,
-                        indexes
+                        indexes,
+                        engine: None,
+                        order_by: None,
+                        primary_key: None,
+                        partition_by: None,
+                        cluster: None
                     }
                 );
             }
@@ -177,6 +192,21 @@ impl Schema {
         let mut summary = String::from("Database Schema:\n\n");
         for table in self.tables.values() {
             summary.push_str(&format!("Table: {}\n", table.name));
+            if let Some(engine) = &table.engine {
+                summary.push_str(&format!("Engine: {}\n", engine));
+            }
+            if let Some(cluster) = &table.cluster {
+                summary.push_str(&format!("Cluster: {}\n", cluster));
+            }
+            if let Some(partition_by) = &table.partition_by {
+                summary.push_str(&format!("Partition By: {}\n", partition_by));
+            }
+            if let Some(order_by) = &table.order_by {
+                summary.push_str(&format!("Order By: ({})\n", order_by.join(", ")));
+            }
+            if let Some(primary_key) = &table.primary_key {
+                summary.push_str(&format!("Primary Key: ({})\n", primary_key.join(", ")));
+            }
             summary.push_str("Columns:\n");
             for col in &table.columns {
                 let nullable = if col.is_nullable { "NULL" } else { "NOT NULL" };
