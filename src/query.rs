@@ -5,7 +5,9 @@ use extract::{ExtractionContext, extract_columns_from_expr, extract_from_set_exp
 use indexmap::IndexSet;
 use rayon::prelude::*;
 use sqlparser::{
-    dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect},
+    dialect::{
+        ClickHouseDialect, Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect
+    },
     parser::Parser
 };
 pub use types::{Query, QueryType};
@@ -14,12 +16,14 @@ use crate::error::{AppResult, query_parse_error};
 
 /// SQL dialect for parsing
 #[derive(Debug, Clone, Copy, Default)]
+#[non_exhaustive]
 pub enum SqlDialect {
     #[default]
     Generic,
     MySQL,
     PostgreSQL,
-    SQLite
+    SQLite,
+    ClickHouse
 }
 
 impl SqlDialect {
@@ -28,7 +32,8 @@ impl SqlDialect {
             Self::Generic => Box::new(GenericDialect {}),
             Self::MySQL => Box::new(MySqlDialect {}),
             Self::PostgreSQL => Box::new(PostgreSqlDialect {}),
-            Self::SQLite => Box::new(SQLiteDialect {})
+            Self::SQLite => Box::new(SQLiteDialect {}),
+            Self::ClickHouse => Box::new(ClickHouseDialect {})
         }
     }
 }
