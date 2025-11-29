@@ -32,14 +32,13 @@ jobs:
         run: cargo nextest run --all-features --profile ci
         continue-on-error: true
       - name: Upload coverage to Codecov
-        if: github.event_name != 'pull_request'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov.info
           fail_ci_if_error: false
       - name: Upload test results to Codecov
-        if: github.event_name != 'pull_request' && !cancelled()
+        if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

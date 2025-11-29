@@ -165,17 +165,21 @@ impl Schema {
                         });
                     }
                 }
+                let engine = Self::extract_engine(&create.table_options);
+                let order_by = create.order_by.as_ref().map(Self::extract_exprs);
+                let primary_key = create.primary_key.as_ref().map(|pk| vec![pk.to_string()]);
+                let cluster = create.on_cluster.map(|c| c.value);
                 self.tables.insert(
                     table_name.clone(),
                     TableInfo {
                         name: table_name,
                         columns,
                         indexes,
-                        engine: None,
-                        order_by: None,
-                        primary_key: None,
+                        engine,
+                        order_by,
+                        primary_key,
                         partition_by: None,
-                        cluster: None
+                        cluster
                     }
                 );
             }
@@ -192,6 +196,35 @@ impl Schema {
             _ => {}
         }
         Ok(())
+    }
+
+    fn extract_engine(options: &sqlparser::ast::CreateTableOptions) -> Option<String> {
+        use sqlparser::ast::{CreateTableOptions, SqlOption};
+        let opts = match options {
+            CreateTableOptions::Plain(opts)
+            | CreateTableOptions::With(opts)
+            | CreateTableOptions::Options(opts)
+            | CreateTableOptions::TableProperties(opts) => opts,
+            CreateTableOptions::None => return None
+        };
+        for opt in opts {
+            if let SqlOption::NamedParenthesizedList(list) = opt
+                && list.key.value.eq_ignore_ascii_case("ENGINE")
+            {
+                return list.name.as_ref().map(|n| n.value.clone());
+            }
+        }
+        None
+    }
+
+    fn extract_exprs(
+        exprs: &sqlparser::ast::OneOrManyWithParens<sqlparser::ast::Expr>
+    ) -> Vec<String> {
+        use sqlparser::ast::OneOrManyWithParens;
+        match exprs {
+            OneOrManyWithParens::One(expr) => vec![expr.to_string()],
+            OneOrManyWithParens::Many(list) => list.iter().map(|e| e.to_string()).collect()
+        }
     }
 
     /// Get summary of schema for LLM analysis

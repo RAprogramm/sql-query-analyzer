@@ -19,6 +19,6 @@ jobs:
       - uses: actions/checkout@v6
       - uses: RAprogramm/cargo-quality@v0
         with:
-          path: src/
+          path: .
           fail_on_issues: 'true'
           post_comment: ${{ github.event_name == 'pull_request' }}

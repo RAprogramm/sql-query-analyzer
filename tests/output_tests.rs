@@ -733,7 +733,6 @@ fn test_analysis_report_counts() {
     report.add_violation(make_violation("I1", "info1", Severity::Info, 2, None));
     report.add_violation(make_violation("I2", "info2", Severity::Info, 2, None));
     report.add_violation(make_violation("I3", "info3", Severity::Info, 2, None));
-
     assert_eq!(report.error_count(), 2);
     assert_eq!(report.warning_count(), 1);
     assert_eq!(report.info_count(), 3);

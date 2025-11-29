@@ -66,7 +66,6 @@ fn test_error_types_are_different() {
     let query_err = query_parse_error("test");
     let llm_err = llm_api_error("test");
     let config_err = config_error("test");
-
     assert!(!schema_err.to_string().is_empty());
     assert!(!query_err.to_string().is_empty());
     assert!(!llm_err.to_string().is_empty());

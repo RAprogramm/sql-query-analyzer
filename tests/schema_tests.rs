@@ -253,3 +253,95 @@ fn test_table_info_clickhouse_fields_default_none() {
     assert!(users.partition_by.is_none());
     assert!(users.cluster.is_none());
 }
+
+#[test]
+fn test_clickhouse_engine_extraction() {
+    let sql = "CREATE TABLE logs (id UInt64) ENGINE = MergeTree ORDER BY id";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    let logs = &schema.tables["logs"];
+    assert_eq!(logs.engine, Some("MergeTree".to_string()));
+}
+
+#[test]
+fn test_clickhouse_order_by_single() {
+    let sql = "CREATE TABLE logs (id UInt64) ENGINE = MergeTree ORDER BY id";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    let logs = &schema.tables["logs"];
+    assert_eq!(logs.order_by, Some(vec!["id".to_string()]));
+}
+
+#[test]
+fn test_clickhouse_order_by_multiple() {
+    let sql = "CREATE TABLE logs (id UInt64, ts DateTime) ENGINE = MergeTree ORDER BY (id, ts)";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    let logs = &schema.tables["logs"];
+    assert_eq!(
+        logs.order_by,
+        Some(vec!["id".to_string(), "ts".to_string()])
+    );
+}
+
+#[test]
+fn test_clickhouse_primary_key() {
+    let sql = "CREATE TABLE logs (id UInt64) ENGINE = MergeTree PRIMARY KEY id ORDER BY id";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    let logs = &schema.tables["logs"];
+    assert_eq!(logs.primary_key, Some(vec!["id".to_string()]));
+}
+
+#[test]
+fn test_clickhouse_on_cluster() {
+    let sql = "CREATE TABLE logs ON CLUSTER my_cluster (id UInt64) ENGINE = MergeTree ORDER BY id";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    let logs = &schema.tables["logs"];
+    assert_eq!(logs.cluster, Some("my_cluster".to_string()));
+}
+
+#[test]
+fn test_clickhouse_replicated_merge_tree() {
+    let sql = "CREATE TABLE logs (id UInt64) ENGINE = ReplicatedMergeTree ORDER BY id";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    let logs = &schema.tables["logs"];
+    assert_eq!(logs.engine, Some("ReplicatedMergeTree".to_string()));
+}
+
+#[test]
+fn test_clickhouse_summary_with_engine() {
+    let sql = "CREATE TABLE logs (id UInt64) ENGINE = MergeTree ORDER BY id";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    let summary = schema.to_summary();
+    assert!(summary.contains("Engine: MergeTree"));
+    assert!(summary.contains("Order By: (id)"));
+}
+
+#[test]
+fn test_clickhouse_summary_with_cluster() {
+    let sql = "CREATE TABLE logs ON CLUSTER prod (id UInt64) ENGINE = MergeTree ORDER BY id";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    let summary = schema.to_summary();
+    assert!(summary.contains("Cluster: prod"));
+}
+
+#[test]
+fn test_clickhouse_summary_with_primary_key() {
+    let sql = "CREATE TABLE logs (id UInt64) ENGINE = MergeTree PRIMARY KEY id ORDER BY id";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    let summary = schema.to_summary();
+    assert!(summary.contains("Primary Key: (id)"));
+}
+
+#[test]
+fn test_clickhouse_no_engine() {
+    let sql = "CREATE TABLE logs (id INT)";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    let logs = &schema.tables["logs"];
+    assert!(logs.engine.is_none());
+}
+
+#[test]
+fn test_table_options_with() {
+    let sql = "CREATE TABLE logs (id INT) WITH (description = 'test')";
+    let schema = Schema::parse(sql, SqlDialect::PostgreSQL).unwrap();
+    let logs = &schema.tables["logs"];
+    assert!(logs.engine.is_none());
+}

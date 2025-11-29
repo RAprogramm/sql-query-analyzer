@@ -172,7 +172,6 @@ async fn main() {
 async fn run() -> AppResult<i32> {
     let cli = Cli::parse();
     let config = Config::load()?;
-
     match cli.command {
         Commands::Analyze {
             schema,
@@ -204,11 +203,8 @@ async fn run() -> AppResult<i32> {
                 dry_run,
                 no_color
             };
-
             let result = run_analyze(params, config).await?;
-
             println!("{}", result.static_output);
-
             if let Some(dry_run_info) = result.dry_run_info {
                 println!("=== DRY RUN - Would send to LLM ===\n");
                 println!("Schema Summary:\n{}\n", dry_run_info.schema_summary);
@@ -216,11 +212,9 @@ async fn run() -> AppResult<i32> {
             } else if result.llm_output.is_none() && !dry_run {
                 println!("Note: Set LLM_API_KEY for additional AI-powered analysis\n");
             }
-
             if let Some(llm_output) = result.llm_output {
                 println!("{}", llm_output);
             }
-
             Ok(result.exit_code)
         }
     }
