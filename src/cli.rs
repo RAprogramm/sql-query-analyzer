@@ -80,6 +80,7 @@ impl Provider {
 }
 
 #[derive(Debug, Clone, ValueEnum)]
+#[non_exhaustive]
 pub enum Dialect {
     Generic,
     Mysql,

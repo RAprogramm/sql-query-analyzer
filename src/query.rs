@@ -16,6 +16,7 @@ use crate::error::{AppResult, query_parse_error};
 
 /// SQL dialect for parsing
 #[derive(Debug, Clone, Copy, Default)]
+#[non_exhaustive]
 pub enum SqlDialect {
     #[default]
     Generic,
