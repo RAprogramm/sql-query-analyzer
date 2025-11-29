@@ -210,7 +210,6 @@ fn test_analysis_report_add_violation() {
 #[test]
 fn test_analysis_report_counts() {
     let mut report = AnalysisReport::new(1, 1);
-
     report.add_violation(Violation {
         rule_id:     "E1",
         rule_name:   "Error",
@@ -220,7 +219,6 @@ fn test_analysis_report_counts() {
         suggestion:  None,
         query_index: 0
     });
-
     report.add_violation(Violation {
         rule_id:     "W1",
         rule_name:   "Warning",
@@ -230,7 +228,6 @@ fn test_analysis_report_counts() {
         suggestion:  None,
         query_index: 0
     });
-
     report.add_violation(Violation {
         rule_id:     "I1",
         rule_name:   "Info",
@@ -240,7 +237,6 @@ fn test_analysis_report_counts() {
         suggestion:  None,
         query_index: 0
     });
-
     assert_eq!(report.error_count(), 1);
     assert_eq!(report.warning_count(), 1);
     assert_eq!(report.info_count(), 1);

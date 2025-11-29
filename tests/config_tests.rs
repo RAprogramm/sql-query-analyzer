@@ -146,9 +146,7 @@ fn test_config_load_with_env_vars() {
         set_var("LLM_MODEL", "gpt-4");
         set_var("OLLAMA_URL", "http://custom:11434");
     }
-
     let config = Config::load().unwrap();
-
     assert_eq!(config.llm.api_key, Some("test-key-12345".to_string()));
     assert_eq!(config.llm.provider, Some("openai".to_string()));
     assert_eq!(config.llm.model, Some("gpt-4".to_string()));
@@ -156,7 +154,6 @@ fn test_config_load_with_env_vars() {
         config.llm.ollama_url,
         Some("http://custom:11434".to_string())
     );
-
     unsafe {
         remove_var("LLM_API_KEY");
         remove_var("LLM_PROVIDER");
