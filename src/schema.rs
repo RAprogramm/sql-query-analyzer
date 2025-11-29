@@ -13,7 +13,7 @@
 //! # Example
 //!
 //! ```
-//! use sql_query_analyzer::schema::Schema;
+//! use sql_query_analyzer::{query::SqlDialect, schema::Schema};
 //!
 //! let sql = r#"
 //!     CREATE TABLE users (
@@ -23,7 +23,7 @@
 //!     CREATE INDEX idx_email ON users(email);
 //! "#;
 //!
-//! let schema = Schema::parse(sql).unwrap();
+//! let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
 //!
 //! let users = schema.tables.get("users").unwrap();
 //! assert_eq!(users.columns.len(), 2);
@@ -35,9 +35,12 @@
 
 use std::collections::BTreeMap;
 
-use sqlparser::{dialect::GenericDialect, parser::Parser};
+use sqlparser::parser::Parser;
 
-use crate::error::{AppResult, schema_parse_error};
+use crate::{
+    error::{AppResult, schema_parse_error},
+    query::SqlDialect
+};
 
 /// Complete information about a database table.
 #[derive(Debug, Clone)]
@@ -96,11 +99,12 @@ pub struct Schema {
 }
 
 impl Schema {
-    /// Parse SQL schema from string
+    /// Parse SQL schema from string with specified dialect
     ///
     /// # Arguments
     ///
     /// * `sql` - SQL schema definition
+    /// * `dialect` - SQL dialect for parsing
     ///
     /// # Returns
     ///
@@ -109,10 +113,10 @@ impl Schema {
     /// # Errors
     ///
     /// Returns error if SQL parsing fails
-    pub fn parse(sql: &str) -> AppResult<Self> {
-        let dialect = GenericDialect {};
-        let statements =
-            Parser::parse_sql(&dialect, sql).map_err(|e| schema_parse_error(e.to_string()))?;
+    pub fn parse(sql: &str, dialect: SqlDialect) -> AppResult<Self> {
+        let parser_dialect = dialect.into_parser_dialect();
+        let statements = Parser::parse_sql(parser_dialect.as_ref(), sql)
+            .map_err(|e| schema_parse_error(e.to_string()))?;
         let mut schema = Self::default();
         for stmt in statements {
             schema.process_statement(stmt)?;

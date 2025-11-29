@@ -21,7 +21,7 @@ fn analyze_query(sql: &str) -> Vec<String> {
 
 fn analyze_with_schema(sql: &str, schema_sql: &str) -> Vec<String> {
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
-    let schema = Schema::parse(schema_sql).unwrap();
+    let schema = Schema::parse(schema_sql, SqlDialect::Generic).unwrap();
     let runner = RuleRunner::with_schema_and_config(schema, RulesConfig::default());
     let report = runner.analyze(&queries);
     report

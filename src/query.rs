@@ -27,7 +27,8 @@ pub enum SqlDialect {
 }
 
 impl SqlDialect {
-    fn into_parser_dialect(self) -> Box<dyn Dialect> {
+    /// Convert to sqlparser dialect for parsing
+    pub fn into_parser_dialect(self) -> Box<dyn Dialect> {
         match self {
             Self::Generic => Box::new(GenericDialect {}),
             Self::MySQL => Box::new(MySqlDialect {}),
