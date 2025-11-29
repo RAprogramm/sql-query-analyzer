@@ -437,3 +437,68 @@ fn test_nested_function_calls() {
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
 }
+
+#[test]
+fn test_clickhouse_simple_select() {
+    let sql = "SELECT id, name FROM users WHERE id = 1";
+    let queries = parse_queries(sql, SqlDialect::ClickHouse).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert_eq!(queries[0].query_type, QueryType::Select);
+}
+
+#[test]
+fn test_clickhouse_to_datetime_function() {
+    let sql = "SELECT toDateTime(timestamp) FROM events";
+    let queries = parse_queries(sql, SqlDialect::ClickHouse).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert_eq!(queries[0].tables[0].as_str(), "events");
+}
+
+#[test]
+fn test_clickhouse_to_start_of_interval() {
+    let sql = "SELECT toStartOfInterval(Timestamp, INTERVAL 60 second) as time FROM logs";
+    let queries = parse_queries(sql, SqlDialect::ClickHouse).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert_eq!(queries[0].tables[0].as_str(), "logs");
+}
+
+#[test]
+fn test_clickhouse_now_function() {
+    let sql = "SELECT * FROM logs WHERE time >= NOW() - INTERVAL 1 HOUR";
+    let queries = parse_queries(sql, SqlDialect::ClickHouse).unwrap();
+    assert_eq!(queries.len(), 1);
+}
+
+#[test]
+fn test_clickhouse_count_function() {
+    let sql = "SELECT SeverityText, count() as count FROM logs GROUP BY SeverityText";
+    let queries = parse_queries(sql, SqlDialect::ClickHouse).unwrap();
+    assert_eq!(queries.len(), 1);
+    assert!(
+        queries[0]
+            .group_cols
+            .iter()
+            .any(|c| c.as_str() == "SeverityText")
+    );
+}
+
+#[test]
+fn test_clickhouse_array_join() {
+    let sql = "SELECT arrayJoin(arr) FROM test";
+    let queries = parse_queries(sql, SqlDialect::ClickHouse).unwrap();
+    assert_eq!(queries.len(), 1);
+}
+
+#[test]
+fn test_clickhouse_if_function() {
+    let sql = "SELECT if(status = 1, 'active', 'inactive') FROM users";
+    let queries = parse_queries(sql, SqlDialect::ClickHouse).unwrap();
+    assert_eq!(queries.len(), 1);
+}
+
+#[test]
+fn test_clickhouse_format_datetime() {
+    let sql = "SELECT formatDateTime(now(), '%Y-%m-%d') FROM system.one";
+    let queries = parse_queries(sql, SqlDialect::ClickHouse).unwrap();
+    assert_eq!(queries.len(), 1);
+}
