@@ -197,7 +197,7 @@ pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<Ana
     let queries_sql = read_queries_input(&params.queries_path)?;
 
     let sql_dialect = convert_dialect(params.dialect);
-    let parsed_schema = Schema::parse(&schema_sql)?;
+    let parsed_schema = Schema::parse(&schema_sql, sql_dialect)?;
     let parsed_queries = parse_queries_cached(&queries_sql, sql_dialect)?;
     let schema_summary = parsed_schema.to_summary();
 
