@@ -207,10 +207,19 @@ fn test_column_info_debug() {
         name:        "test".to_string(),
         data_type:   "INT".to_string(),
         is_nullable: true,
-        is_primary:  false
+        is_primary:  false,
+        codec:       None
     };
     let debug = format!("{:?}", col);
     assert!(debug.contains("test"));
+}
+
+#[test]
+fn test_column_info_codec_default_none() {
+    let sql = "CREATE TABLE users (id INT PRIMARY KEY)";
+    let schema = Schema::parse(sql).unwrap();
+    let users = &schema.tables["users"];
+    assert!(users.columns[0].codec.is_none());
 }
 
 #[test]
