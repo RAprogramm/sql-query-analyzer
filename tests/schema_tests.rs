@@ -232,3 +232,15 @@ fn test_parse_nullable_column() {
     let users = &schema.tables["users"];
     assert!(users.columns[1].is_nullable);
 }
+
+#[test]
+fn test_table_info_clickhouse_fields_default_none() {
+    let sql = "CREATE TABLE users (id INT PRIMARY KEY)";
+    let schema = Schema::parse(sql).unwrap();
+    let users = &schema.tables["users"];
+    assert!(users.engine.is_none());
+    assert!(users.order_by.is_none());
+    assert!(users.primary_key.is_none());
+    assert!(users.partition_by.is_none());
+    assert!(users.cluster.is_none());
+}
