@@ -70,7 +70,9 @@ pub struct ColumnInfo {
     /// Whether NULL values are allowed
     pub is_nullable: bool,
     /// Whether this is a primary key column
-    pub is_primary:  bool
+    pub is_primary:  bool,
+    /// Compression codec (ClickHouse: ZSTD, LZ4, Delta, etc.)
+    pub codec:       Option<String>
 }
 
 /// Index metadata extracted from CREATE INDEX or table constraints.
@@ -141,7 +143,8 @@ impl Schema {
                         is_nullable: !column.options.iter().any(|opt| {
                             matches!(opt.option, sqlparser::ast::ColumnOption::NotNull)
                         }),
-                        is_primary
+                        is_primary,
+                        codec: None
                     });
                 }
                 for constraint in create.constraints {
@@ -211,12 +214,18 @@ impl Schema {
             for col in &table.columns {
                 let nullable = if col.is_nullable { "NULL" } else { "NOT NULL" };
                 let primary = if col.is_primary { " PRIMARY KEY" } else { "" };
+                let codec = col
+                    .codec
+                    .as_ref()
+                    .map(|c| format!(" CODEC({})", c))
+                    .unwrap_or_default();
                 summary.push_str(&format!(
-                    "  - {name} {data_type} {nullable}{primary}\n",
+                    "  - {name} {data_type} {nullable}{primary}{codec}\n",
                     name = col.name,
                     data_type = col.data_type,
                     nullable = nullable,
-                    primary = primary
+                    primary = primary,
+                    codec = codec
                 ));
             }
             if !table.indexes.is_empty() {
