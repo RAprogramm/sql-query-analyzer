@@ -64,7 +64,8 @@ pub fn convert_dialect(dialect: Dialect) -> SqlDialect {
         Dialect::Generic => SqlDialect::Generic,
         Dialect::Mysql => SqlDialect::MySQL,
         Dialect::Postgresql => SqlDialect::PostgreSQL,
-        Dialect::Sqlite => SqlDialect::SQLite
+        Dialect::Sqlite => SqlDialect::SQLite,
+        Dialect::Clickhouse => SqlDialect::ClickHouse
     }
 }
 
@@ -297,6 +298,14 @@ mod tests {
         assert!(matches!(
             convert_dialect(Dialect::Sqlite),
             SqlDialect::SQLite
+        ));
+    }
+
+    #[test]
+    fn test_convert_dialect_clickhouse() {
+        assert!(matches!(
+            convert_dialect(Dialect::Clickhouse),
+            SqlDialect::ClickHouse
         ));
     }
 
