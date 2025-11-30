@@ -13,7 +13,7 @@
 //! # Example
 //!
 //! ```
-//! use sql_query_analyzer::schema::Schema;
+//! use sql_query_analyzer::{query::SqlDialect, schema::Schema};
 //!
 //! let sql = r#"
 //!     CREATE TABLE users (
@@ -23,7 +23,7 @@
 //!     CREATE INDEX idx_email ON users(email);
 //! "#;
 //!
-//! let schema = Schema::parse(sql).unwrap();
+//! let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
 //!
 //! let users = schema.tables.get("users").unwrap();
 //! assert_eq!(users.columns.len(), 2);
@@ -35,19 +35,32 @@
 
 use std::collections::BTreeMap;
 
-use sqlparser::{dialect::GenericDialect, parser::Parser};
+use sqlparser::parser::Parser;
 
-use crate::error::{AppResult, schema_parse_error};
+use crate::{
+    error::{AppResult, schema_parse_error},
+    query::SqlDialect
+};
 
 /// Complete information about a database table.
 #[derive(Debug, Clone)]
 pub struct TableInfo {
     /// Table name
-    pub name:    String,
+    pub name:         String,
     /// Ordered list of columns
-    pub columns: Vec<ColumnInfo>,
+    pub columns:      Vec<ColumnInfo>,
     /// Indexes defined on this table
-    pub indexes: Vec<IndexInfo>
+    pub indexes:      Vec<IndexInfo>,
+    /// Storage engine (ClickHouse: MergeTree, ReplicatedMergeTree, etc.)
+    pub engine:       Option<String>,
+    /// Physical sort order columns (ClickHouse ORDER BY)
+    pub order_by:     Option<Vec<String>>,
+    /// Sparse index columns (ClickHouse PRIMARY KEY)
+    pub primary_key:  Option<Vec<String>>,
+    /// Partitioning expression (ClickHouse PARTITION BY)
+    pub partition_by: Option<String>,
+    /// Cluster name (ClickHouse ON CLUSTER)
+    pub cluster:      Option<String>
 }
 
 /// Column metadata extracted from CREATE TABLE.
@@ -60,7 +73,9 @@ pub struct ColumnInfo {
     /// Whether NULL values are allowed
     pub is_nullable: bool,
     /// Whether this is a primary key column
-    pub is_primary:  bool
+    pub is_primary:  bool,
+    /// Compression codec (ClickHouse: ZSTD, LZ4, Delta, etc.)
+    pub codec:       Option<String>
 }
 
 /// Index metadata extracted from CREATE INDEX or table constraints.
@@ -84,11 +99,12 @@ pub struct Schema {
 }
 
 impl Schema {
-    /// Parse SQL schema from string
+    /// Parse SQL schema from string with specified dialect
     ///
     /// # Arguments
     ///
     /// * `sql` - SQL schema definition
+    /// * `dialect` - SQL dialect for parsing
     ///
     /// # Returns
     ///
@@ -97,10 +113,10 @@ impl Schema {
     /// # Errors
     ///
     /// Returns error if SQL parsing fails
-    pub fn parse(sql: &str) -> AppResult<Self> {
-        let dialect = GenericDialect {};
-        let statements =
-            Parser::parse_sql(&dialect, sql).map_err(|e| schema_parse_error(e.to_string()))?;
+    pub fn parse(sql: &str, dialect: SqlDialect) -> AppResult<Self> {
+        let parser_dialect = dialect.into_parser_dialect();
+        let statements = Parser::parse_sql(parser_dialect.as_ref(), sql)
+            .map_err(|e| schema_parse_error(e.to_string()))?;
         let mut schema = Self::default();
         for stmt in statements {
             schema.process_statement(stmt)?;
@@ -131,7 +147,8 @@ impl Schema {
                         is_nullable: !column.options.iter().any(|opt| {
                             matches!(opt.option, sqlparser::ast::ColumnOption::NotNull)
                         }),
-                        is_primary
+                        is_primary,
+                        codec: None
                     });
                 }
                 for constraint in create.constraints {
@@ -148,12 +165,21 @@ impl Schema {
                         });
                     }
                 }
+                let engine = Self::extract_engine(&create.table_options);
+                let order_by = create.order_by.as_ref().map(Self::extract_exprs);
+                let primary_key = create.primary_key.as_ref().map(|pk| vec![pk.to_string()]);
+                let cluster = create.on_cluster.map(|c| c.value);
                 self.tables.insert(
                     table_name.clone(),
                     TableInfo {
                         name: table_name,
                         columns,
-                        indexes
+                        indexes,
+                        engine,
+                        order_by,
+                        primary_key,
+                        partition_by: None,
+                        cluster
                     }
                 );
             }
@@ -172,21 +198,71 @@ impl Schema {
         Ok(())
     }
 
+    fn extract_engine(options: &sqlparser::ast::CreateTableOptions) -> Option<String> {
+        use sqlparser::ast::{CreateTableOptions, SqlOption};
+        let opts = match options {
+            CreateTableOptions::Plain(opts)
+            | CreateTableOptions::With(opts)
+            | CreateTableOptions::Options(opts)
+            | CreateTableOptions::TableProperties(opts) => opts,
+            CreateTableOptions::None => return None
+        };
+        for opt in opts {
+            if let SqlOption::NamedParenthesizedList(list) = opt
+                && list.key.value.eq_ignore_ascii_case("ENGINE")
+            {
+                return list.name.as_ref().map(|n| n.value.clone());
+            }
+        }
+        None
+    }
+
+    fn extract_exprs(
+        exprs: &sqlparser::ast::OneOrManyWithParens<sqlparser::ast::Expr>
+    ) -> Vec<String> {
+        use sqlparser::ast::OneOrManyWithParens;
+        match exprs {
+            OneOrManyWithParens::One(expr) => vec![expr.to_string()],
+            OneOrManyWithParens::Many(list) => list.iter().map(|e| e.to_string()).collect()
+        }
+    }
+
     /// Get summary of schema for LLM analysis
     pub fn to_summary(&self) -> String {
         let mut summary = String::from("Database Schema:\n\n");
         for table in self.tables.values() {
             summary.push_str(&format!("Table: {}\n", table.name));
+            if let Some(engine) = &table.engine {
+                summary.push_str(&format!("Engine: {}\n", engine));
+            }
+            if let Some(cluster) = &table.cluster {
+                summary.push_str(&format!("Cluster: {}\n", cluster));
+            }
+            if let Some(partition_by) = &table.partition_by {
+                summary.push_str(&format!("Partition By: {}\n", partition_by));
+            }
+            if let Some(order_by) = &table.order_by {
+                summary.push_str(&format!("Order By: ({})\n", order_by.join(", ")));
+            }
+            if let Some(primary_key) = &table.primary_key {
+                summary.push_str(&format!("Primary Key: ({})\n", primary_key.join(", ")));
+            }
             summary.push_str("Columns:\n");
             for col in &table.columns {
                 let nullable = if col.is_nullable { "NULL" } else { "NOT NULL" };
                 let primary = if col.is_primary { " PRIMARY KEY" } else { "" };
+                let codec = col
+                    .codec
+                    .as_ref()
+                    .map(|c| format!(" CODEC({})", c))
+                    .unwrap_or_default();
                 summary.push_str(&format!(
-                    "  - {name} {data_type} {nullable}{primary}\n",
+                    "  - {name} {data_type} {nullable}{primary}{codec}\n",
                     name = col.name,
                     data_type = col.data_type,
                     nullable = nullable,
-                    primary = primary
+                    primary = primary,
+                    codec = codec
                 ));
             }
             if !table.indexes.is_empty() {

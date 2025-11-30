@@ -80,11 +80,13 @@ impl Provider {
 }
 
 #[derive(Debug, Clone, ValueEnum)]
+#[non_exhaustive]
 pub enum Dialect {
     Generic,
     Mysql,
     Postgresql,
-    Sqlite
+    Sqlite,
+    Clickhouse
 }
 
 #[derive(Debug, Clone, ValueEnum)]

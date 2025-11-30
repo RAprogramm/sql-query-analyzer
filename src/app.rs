@@ -64,7 +64,8 @@ pub fn convert_dialect(dialect: Dialect) -> SqlDialect {
         Dialect::Generic => SqlDialect::Generic,
         Dialect::Mysql => SqlDialect::MySQL,
         Dialect::Postgresql => SqlDialect::PostgreSQL,
-        Dialect::Sqlite => SqlDialect::SQLite
+        Dialect::Sqlite => SqlDialect::SQLite,
+        Dialect::Clickhouse => SqlDialect::ClickHouse
     }
 }
 
@@ -192,22 +193,16 @@ pub fn get_effective_ollama_url(url: String, config_url: Option<String>) -> Stri
 pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<AnalyzeResult> {
     let schema_sql = read_to_string(&params.schema_path)
         .map_err(|e| file_read_error(&params.schema_path, e))?;
-
     let queries_sql = read_queries_input(&params.queries_path)?;
-
     let sql_dialect = convert_dialect(params.dialect);
-    let parsed_schema = Schema::parse(&schema_sql)?;
+    let parsed_schema = Schema::parse(&schema_sql, sql_dialect)?;
     let parsed_queries = parse_queries_cached(&queries_sql, sql_dialect)?;
     let schema_summary = parsed_schema.to_summary();
-
     let output_opts = create_output_options(params.output_format, params.no_color, params.verbose);
-
     let runner = RuleRunner::with_schema_and_config(parsed_schema.clone(), config.rules.clone());
     let static_report = runner.analyze(&parsed_queries);
     let static_output = format_static_analysis(&static_report, &output_opts);
-
     let exit_code = calculate_exit_code(&static_report);
-
     if params.dry_run {
         let queries_summary = format_queries_summary(&parsed_queries, &output_opts);
         return Ok(AnalyzeResult {
@@ -220,11 +215,9 @@ pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<Ana
             })
         });
     }
-
     let effective_api_key = params.api_key.or(config.llm.api_key.clone());
     let effective_ollama_url =
         get_effective_ollama_url(params.ollama_url, config.llm.ollama_url.clone());
-
     if !has_llm_access(&effective_api_key, &params.provider) {
         return Ok(AnalyzeResult {
             exit_code,
@@ -233,31 +226,24 @@ pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<Ana
             dry_run_info: None
         });
     }
-
     let model_name = get_effective_model(params.model, config.llm.model.clone(), &params.provider);
-
     let llm_provider = build_llm_provider(
         params.provider,
         effective_api_key,
         model_name,
         effective_ollama_url
     )?;
-
     let pb = ProgressBar::new_spinner();
     if let Ok(style) = ProgressStyle::default_spinner().template("{spinner:.green} {msg}") {
         pb.set_style(style);
     }
     pb.set_message("Analyzing queries with LLM...");
     pb.enable_steady_tick(Duration::from_millis(100));
-
     let queries_summary = format_queries_summary(&parsed_queries, &output_opts);
     let client = LlmClient::with_retry_config(llm_provider, config.retry);
     let analysis = client.analyze(&schema_summary, &queries_summary).await?;
-
     pb.finish_and_clear();
-
     let llm_output = format_analysis_result(&parsed_queries, &analysis, &output_opts);
-
     Ok(AnalyzeResult {
         exit_code,
         static_output,
@@ -297,6 +283,14 @@ mod tests {
         assert!(matches!(
             convert_dialect(Dialect::Sqlite),
             SqlDialect::SQLite
+        ));
+    }
+
+    #[test]
+    fn test_convert_dialect_clickhouse() {
+        assert!(matches!(
+            convert_dialect(Dialect::Clickhouse),
+            SqlDialect::ClickHouse
         ));
     }
 
