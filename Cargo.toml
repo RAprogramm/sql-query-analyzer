@@ -12,7 +12,7 @@ readme = "README.md"
 keywords = ["sql", "analyzer", "linter", "performance", "database"]
 categories = ["development-tools", "command-line-utilities", "database"]
 exclude = [".github", "target", ".git"]
-rust-version = "1.90"
+rust-version = "1.91"
 
 [lib]
 name = "sql_query_analyzer"
@@ -25,13 +25,17 @@ path = "src/main.rs"
 [dependencies]
 clap = { version = "4.5", features = ["derive", "env"] }
 tokio = { version = "1.48", features = ["full"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "stream",
+  "rustls-tls",
+] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
 toml = "0.9"
-masterror = "0.25"
-sqlparser = "0.59"
+masterror = "0.26"
+sqlparser = "0.60"
 smallvec = { version = "1.15", features = ["serde"] }
 indexmap = { version = "2.12", features = ["serde"] }
 colored = "3"
