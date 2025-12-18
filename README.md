@@ -24,6 +24,7 @@ A comprehensive SQL analysis tool that combines fast, deterministic static analy
 - [CI/CD Integration](#cicd-integration)
 - [LLM Providers](#llm-providers)
 - [Architecture](#architecture)
+- [ClickHouse Support](#clickhouse-support)
 - [CI Pipeline](#ci-pipeline)
 - [Performance](#performance)
 - [Contributing](#contributing)
@@ -35,6 +36,7 @@ A comprehensive SQL analysis tool that combines fast, deterministic static analy
 
 - **20 Built-in Rules** — Performance, style, and security checks run instantly without API calls
 - **Schema-Aware Analysis** — Validates queries against your database schema, suggests missing indexes
+- **Multi-Dialect Support** — Generic, MySQL, PostgreSQL, SQLite, and ClickHouse with preprocessor for dialect-specific syntax
 - **Multiple Output Formats** — Text, JSON, YAML, and SARIF for CI/CD integration
 - **Parallel Execution** — Rules execute concurrently using [rayon](https://github.com/rayon-rs/rayon)
 - **Optional LLM Analysis** — Deep semantic analysis via OpenAI, Anthropic, or local Ollama
@@ -179,7 +181,7 @@ sql-query-analyzer analyze [OPTIONS] -s <SCHEMA> -q <QUERIES>
 | `-a, --api-key <KEY>` | API key (or use `LLM_API_KEY` env) | - |
 | `-m, --model <MODEL>` | Model name | provider default |
 | `--ollama-url <URL>` | Ollama base URL | `http://localhost:11434` |
-| `--dialect <DIALECT>` | SQL dialect: `generic`, `mysql`, `postgresql`, `sqlite` | `generic` |
+| `--dialect <DIALECT>` | SQL dialect: `generic`, `mysql`, `postgresql`, `sqlite`, `clickhouse` | `generic` |
 | `-f, --output-format <FMT>` | Output: `text`, `json`, `yaml`, `sarif` | `text` |
 | `-v, --verbose` | Show complexity scores | false |
 | `--dry-run` | Show what would be sent to LLM | false |
@@ -282,7 +284,7 @@ jobs:
 |-------|-------------|---------|
 | `schema` | Path to SQL schema file | required |
 | `queries` | Path to SQL queries file | required |
-| `dialect` | SQL dialect (generic, mysql, postgresql, sqlite) | `generic` |
+| `dialect` | SQL dialect (generic, mysql, postgresql, sqlite, clickhouse) | `generic` |
 | `format` | Output format (text, json, yaml, sarif) | `text` |
 | `fail-on-warning` | Fail if warnings are found | `false` |
 | `fail-on-error` | Fail if errors are found | `true` |
@@ -449,6 +451,42 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql
          │  Text/JSON/YAML/SARIF  │
          └────────────────────────┘
 ```
+
+<div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
+
+## ClickHouse Support
+
+The analyzer includes a preprocessor that handles ClickHouse-specific DDL constructs not supported by the underlying SQL parser:
+
+### Supported Constructs
+
+| Construct | Example | Description |
+|-----------|---------|-------------|
+| `CODEC` | `col String CODEC(ZSTD)` | Column compression codecs |
+| `TTL` | `TTL event_date + INTERVAL 90 DAY` | Data expiration rules |
+| `SETTINGS` | `SETTINGS index_granularity = 8192` | Table-level settings |
+| `PARTITION BY` | `PARTITION BY toYYYYMM(date)` | Partitioning expressions |
+
+### Example
+
+```sql
+CREATE TABLE events ON CLUSTER default (
+    event_date Date,
+    event_time DateTime CODEC(Delta, ZSTD),
+    user_id UInt64 CODEC(T64),
+    data String CODEC(ZSTD(3))
+) ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/events', '{replica}')
+PARTITION BY toYYYYMM(event_date)
+ORDER BY (event_date, user_id)
+TTL event_date + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192
+```
+
+```bash
+sql-query-analyzer analyze --dialect clickhouse -s schema.sql -q queries.sql
+```
+
+The preprocessor extracts metadata (codecs, TTL, settings) and removes unsupported syntax before parsing, ensuring compatibility while preserving information for analysis output.
 
 <div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
 
