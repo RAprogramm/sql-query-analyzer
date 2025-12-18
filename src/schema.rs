@@ -39,6 +39,7 @@ use sqlparser::parser::Parser;
 
 use crate::{
     error::{AppResult, schema_parse_error},
+    preprocessor::{Preprocessor, PreprocessorMetadata},
     query::SqlDialect
 };
 
@@ -114,17 +115,23 @@ impl Schema {
     ///
     /// Returns error if SQL parsing fails
     pub fn parse(sql: &str, dialect: SqlDialect) -> AppResult<Self> {
+        let preprocessor = Preprocessor::new(dialect);
+        let preprocessed = preprocessor.process(sql);
         let parser_dialect = dialect.into_parser_dialect();
-        let statements = Parser::parse_sql(parser_dialect.as_ref(), sql)
+        let statements = Parser::parse_sql(parser_dialect.as_ref(), &preprocessed.sql)
             .map_err(|e| schema_parse_error(e.to_string()))?;
         let mut schema = Self::default();
         for stmt in statements {
-            schema.process_statement(stmt)?;
+            schema.process_statement(stmt, &preprocessed.metadata)?;
         }
         Ok(schema)
     }
 
-    fn process_statement(&mut self, stmt: sqlparser::ast::Statement) -> AppResult<()> {
+    fn process_statement(
+        &mut self,
+        stmt: sqlparser::ast::Statement,
+        metadata: &PreprocessorMetadata
+    ) -> AppResult<()> {
         use sqlparser::ast::Statement;
         match stmt {
             Statement::CreateTable(create) => {
@@ -132,17 +139,19 @@ impl Schema {
                 let mut columns = Vec::new();
                 let mut indexes = Vec::new();
                 for column in create.columns {
+                    let col_name = column.name.to_string();
                     let is_primary = column.options.iter().any(|opt| {
                         matches!(opt.option, sqlparser::ast::ColumnOption::PrimaryKey(_))
                     });
+                    let codec = metadata.codecs.get(&col_name).cloned();
                     columns.push(ColumnInfo {
-                        name: column.name.to_string(),
+                        name: col_name,
                         data_type: column.data_type.to_string(),
                         is_nullable: !column.options.iter().any(|opt| {
                             matches!(opt.option, sqlparser::ast::ColumnOption::NotNull)
                         }),
                         is_primary,
-                        codec: None
+                        codec
                     });
                 }
                 for constraint in create.constraints {

@@ -142,6 +142,7 @@ mod config;
 mod error;
 mod llm;
 mod output;
+mod preprocessor;
 mod query;
 mod rules;
 mod schema;
@@ -163,7 +164,7 @@ async fn main() {
     match run().await {
         Ok(code) => process::exit(code),
         Err(e) => {
-            eprintln!("Error: {}", e);
+            eprintln!("Error: {}", e.render_message());
             process::exit(1);
         }
     }
