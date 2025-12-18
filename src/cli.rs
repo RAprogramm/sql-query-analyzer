@@ -28,7 +28,7 @@ pub enum Commands {
         provider: Provider,
 
         /// API key for OpenAI or Anthropic
-        #[arg(short, long, env = "LLM_API_KEY")]
+        #[arg(short, long, env = "LLM_API_KEY", hide_env_values = true)]
         api_key: Option<String>,
 
         /// Model name
