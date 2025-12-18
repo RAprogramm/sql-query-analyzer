@@ -9,6 +9,7 @@ pub mod config;
 pub mod error;
 pub mod llm;
 pub mod output;
+pub mod preprocessor;
 pub mod query;
 pub mod rules;
 pub mod schema;
