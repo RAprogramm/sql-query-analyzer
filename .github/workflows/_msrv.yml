@@ -12,14 +12,19 @@ on:
 
 jobs:
   msrv:
-    name: MSRV (1.90)
+    name: MSRV
     runs-on: ubuntu-latest
     if: inputs.rust_changed == 'true'
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@1.100.0
+      - name: Get MSRV from Cargo.toml
+        id: msrv
+        run: echo "version=$(grep '^rust-version' Cargo.toml | sed 's/.*= *\"\([^\"]*\)\".*/\1/')" >> $GITHUB_OUTPUT
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
       - uses: Swatinem/rust-cache@v2
         with:
-          key: msrv
+          key: msrv-${{ steps.msrv.outputs.version }}
       - name: Check MSRV compatibility
         run: cargo check --all-features --all-targets

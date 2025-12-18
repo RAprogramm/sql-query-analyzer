@@ -133,13 +133,7 @@ impl Schema {
                 let mut indexes = Vec::new();
                 for column in create.columns {
                     let is_primary = column.options.iter().any(|opt| {
-                        matches!(
-                            opt.option,
-                            sqlparser::ast::ColumnOption::Unique {
-                                is_primary: true,
-                                ..
-                            }
-                        )
+                        matches!(opt.option, sqlparser::ast::ColumnOption::PrimaryKey(_))
                     });
                     columns.push(ColumnInfo {
                         name: column.name.to_string(),
@@ -152,15 +146,10 @@ impl Schema {
                     });
                 }
                 for constraint in create.constraints {
-                    if let sqlparser::ast::TableConstraint::Index {
-                        name,
-                        columns: idx_cols,
-                        ..
-                    } = constraint
-                    {
+                    if let sqlparser::ast::TableConstraint::Index(idx) = constraint {
                         indexes.push(IndexInfo {
-                            name:      name.map(|n| n.to_string()).unwrap_or_default(),
-                            columns:   idx_cols.iter().map(|c| c.to_string()).collect(),
+                            name:      idx.name.map(|n| n.to_string()).unwrap_or_default(),
+                            columns:   idx.columns.iter().map(|c| c.to_string()).collect(),
                             is_unique: false
                         });
                     }

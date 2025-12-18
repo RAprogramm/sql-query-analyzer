@@ -62,14 +62,10 @@ fn parse_statement(stmt: sqlparser::ast::Statement) -> AppResult<Query> {
             q.tables.push(insert.table.to_string().into());
             Ok(q)
         }
-        Statement::Update {
-            table,
-            selection,
-            ..
-        } => {
+        Statement::Update(update) => {
             let mut q = Query::new(raw, QueryType::Update);
-            q.tables.push(table.relation.to_string().into());
-            if let Some(sel) = selection {
+            q.tables.push(update.table.relation.to_string().into());
+            if let Some(sel) = update.selection {
                 let mut cols = IndexSet::new();
                 extract_columns_from_expr(&sel, &mut cols);
                 q.where_cols = cols.into_iter().collect();
@@ -90,11 +86,9 @@ fn parse_statement(stmt: sqlparser::ast::Statement) -> AppResult<Query> {
             }
             Ok(q)
         }
-        Statement::Truncate {
-            table_names, ..
-        } => {
+        Statement::Truncate(truncate) => {
             let mut q = Query::new(raw, QueryType::Truncate);
-            for table in table_names {
+            for table in truncate.table_names {
                 q.tables.push(table.name.to_string().into());
             }
             Ok(q)

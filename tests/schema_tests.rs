@@ -345,3 +345,35 @@ fn test_table_options_with() {
     let logs = &schema.tables["logs"];
     assert!(logs.engine.is_none());
 }
+
+#[test]
+fn test_mysql_inline_index_constraint() {
+    let sql = r#"
+        CREATE TABLE users (
+            id INT PRIMARY KEY,
+            email VARCHAR(255),
+            INDEX idx_email (email)
+        )
+    "#;
+    let schema = Schema::parse(sql, SqlDialect::MySQL).unwrap();
+    let users = &schema.tables["users"];
+    assert_eq!(users.indexes.len(), 1);
+    assert_eq!(users.indexes[0].name, "idx_email");
+    assert_eq!(users.indexes[0].columns, vec!["email".to_string()]);
+    assert!(!users.indexes[0].is_unique);
+}
+
+#[test]
+fn test_mysql_inline_key_constraint() {
+    let sql = r#"
+        CREATE TABLE orders (
+            id INT PRIMARY KEY,
+            user_id INT,
+            KEY idx_user (user_id)
+        )
+    "#;
+    let schema = Schema::parse(sql, SqlDialect::MySQL).unwrap();
+    let orders = &schema.tables["orders"];
+    assert_eq!(orders.indexes.len(), 1);
+    assert_eq!(orders.indexes[0].name, "idx_user");
+}
