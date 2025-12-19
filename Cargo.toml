@@ -1,6 +1,6 @@
 [package]
 name = "sql_query_analyzer"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2024"
 authors = ["RAprogramm <andrey.rozanov.vl@gmail.com>"]
 description = "Static analysis tool for SQL queries with 20 built-in rules for performance, security, and style"
