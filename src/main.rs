@@ -153,7 +153,7 @@ use clap::Parser;
 use tokio::main;
 
 use crate::{
-    app::{AnalyzeParams, run_analyze},
+    app::{CommandOutput, execute_command},
     cli::{Cli, Commands},
     config::Config,
     error::AppResult
@@ -161,8 +161,12 @@ use crate::{
 
 #[main]
 async fn main() {
-    match run().await {
-        Ok(code) => process::exit(code),
+    let cli = Cli::parse();
+    match run(cli.command).await {
+        Ok(output) => {
+            print_output(&output);
+            process::exit(output.exit_code);
+        }
         Err(e) => {
             eprintln!("Error: {}", e.render_message());
             process::exit(1);
@@ -170,53 +174,109 @@ async fn main() {
     }
 }
 
-async fn run() -> AppResult<i32> {
-    let cli = Cli::parse();
+async fn run(command: Commands) -> AppResult<CommandOutput> {
     let config = Config::load()?;
-    match cli.command {
-        Commands::Analyze {
-            schema,
-            queries,
-            provider,
-            api_key,
-            model,
-            ollama_url,
-            dialect,
-            output_format,
-            verbose,
-            dry_run,
-            no_color
-        } => {
-            let params = AnalyzeParams {
-                schema_path: schema.display().to_string(),
-                queries_path: if queries.to_str() == Some("-") {
-                    "-".to_string()
-                } else {
-                    queries.display().to_string()
-                },
-                provider,
-                api_key,
-                model,
-                ollama_url,
-                dialect,
-                output_format,
-                verbose,
-                dry_run,
-                no_color
-            };
-            let result = run_analyze(params, config).await?;
-            println!("{}", result.static_output);
-            if let Some(dry_run_info) = result.dry_run_info {
-                println!("=== DRY RUN - Would send to LLM ===\n");
-                println!("Schema Summary:\n{}\n", dry_run_info.schema_summary);
-                println!("Queries Summary:\n{}", dry_run_info.queries_summary);
-            } else if result.llm_output.is_none() && !dry_run {
-                println!("Note: Set LLM_API_KEY for additional AI-powered analysis\n");
-            }
-            if let Some(llm_output) = result.llm_output {
-                println!("{}", llm_output);
-            }
-            Ok(result.exit_code)
-        }
+    execute_command(command, config).await
+}
+
+fn print_output(output: &CommandOutput) {
+    for line in &output.stdout {
+        println!("{}", line);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use tempfile::NamedTempFile;
+
+    use super::*;
+    use crate::cli::{Dialect, Format, Provider};
+
+    #[tokio::test]
+    async fn test_run_success() {
+        use std::io::Write;
+
+        let mut schema = NamedTempFile::new().unwrap();
+        writeln!(schema, "CREATE TABLE t (id INT);").unwrap();
+
+        let mut queries = NamedTempFile::new().unwrap();
+        writeln!(queries, "SELECT id FROM t;").unwrap();
+
+        let cmd = Commands::Analyze {
+            schema:        schema.path().to_path_buf(),
+            queries:       queries.path().to_path_buf(),
+            provider:      Provider::OpenAI,
+            api_key:       None,
+            model:         None,
+            ollama_url:    "http://localhost:11434".to_string(),
+            dialect:       Dialect::Generic,
+            output_format: Format::Text,
+            verbose:       false,
+            dry_run:       false,
+            no_color:      true
+        };
+
+        let result = run(cmd).await.unwrap();
+        assert_eq!(result.exit_code, 0);
+    }
+
+    #[tokio::test]
+    async fn test_run_file_not_found() {
+        let cmd = Commands::Analyze {
+            schema:        PathBuf::from("/nonexistent.sql"),
+            queries:       PathBuf::from("/nonexistent.sql"),
+            provider:      Provider::OpenAI,
+            api_key:       None,
+            model:         None,
+            ollama_url:    "http://localhost:11434".to_string(),
+            dialect:       Dialect::Generic,
+            output_format: Format::Text,
+            verbose:       false,
+            dry_run:       false,
+            no_color:      true
+        };
+
+        let result = run(cmd).await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_print_output() {
+        let output = CommandOutput {
+            exit_code: 0,
+            stdout:    vec!["line1".to_string(), "line2".to_string()]
+        };
+        print_output(&output);
+    }
+
+    #[tokio::test]
+    async fn test_run_dry_run() {
+        use std::io::Write;
+
+        let mut schema = NamedTempFile::new().unwrap();
+        writeln!(schema, "CREATE TABLE x (id INT);").unwrap();
+
+        let mut queries = NamedTempFile::new().unwrap();
+        writeln!(queries, "SELECT * FROM x;").unwrap();
+
+        let cmd = Commands::Analyze {
+            schema:        schema.path().to_path_buf(),
+            queries:       queries.path().to_path_buf(),
+            provider:      Provider::OpenAI,
+            api_key:       None,
+            model:         None,
+            ollama_url:    "http://localhost:11434".to_string(),
+            dialect:       Dialect::Generic,
+            output_format: Format::Text,
+            verbose:       false,
+            dry_run:       true,
+            no_color:      true
+        };
+
+        let result = run(cmd).await.unwrap();
+        let output = result.stdout.join("\n");
+        assert!(output.contains("DRY RUN"));
     }
 }

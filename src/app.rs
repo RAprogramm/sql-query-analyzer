@@ -13,7 +13,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::{
     cache::{cache_queries, get_cached},
-    cli::{Dialect, Format, Provider},
+    cli::{Commands, Dialect, Format, Provider},
     config::Config,
     error::{AppResult, config_error, file_read_error},
     llm::{LlmClient, LlmProvider},
@@ -250,6 +250,76 @@ pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<Ana
         llm_output: Some(llm_output),
         dry_run_info: None
     })
+}
+
+/// Output from command execution.
+#[derive(Debug, Clone)]
+pub struct CommandOutput {
+    /// Exit code for the process.
+    pub exit_code: i32,
+    /// Lines to print to stdout.
+    pub stdout:    Vec<String>
+}
+
+/// Execute a CLI command and return output.
+pub async fn execute_command(command: Commands, config: Config) -> AppResult<CommandOutput> {
+    match command {
+        Commands::Analyze {
+            schema,
+            queries,
+            provider,
+            api_key,
+            model,
+            ollama_url,
+            dialect,
+            output_format,
+            verbose,
+            dry_run,
+            no_color
+        } => {
+            let params = AnalyzeParams {
+                schema_path: schema.display().to_string(),
+                queries_path: if queries.to_str() == Some("-") {
+                    "-".to_string()
+                } else {
+                    queries.display().to_string()
+                },
+                provider,
+                api_key,
+                model,
+                ollama_url,
+                dialect,
+                output_format,
+                verbose,
+                dry_run,
+                no_color
+            };
+            let result = run_analyze(params, config).await?;
+            let mut stdout = vec![result.static_output];
+            if let Some(dry_run_info) = result.dry_run_info {
+                stdout.push("=== DRY RUN - Would send to LLM ===\n".to_string());
+                stdout.push(format!(
+                    "Schema Summary:\n{}\n",
+                    dry_run_info.schema_summary
+                ));
+                stdout.push(format!(
+                    "Queries Summary:\n{}",
+                    dry_run_info.queries_summary
+                ));
+            } else if result.llm_output.is_none() && !dry_run {
+                stdout.push(
+                    "Note: Set LLM_API_KEY for additional AI-powered analysis\n".to_string()
+                );
+            }
+            if let Some(llm_output) = result.llm_output {
+                stdout.push(llm_output);
+            }
+            Ok(CommandOutput {
+                exit_code: result.exit_code,
+                stdout
+            })
+        }
+    }
 }
 
 #[cfg(test)]
@@ -591,5 +661,272 @@ mod tests {
         };
         let cloned = params.clone();
         assert_eq!(cloned.schema_path, params.schema_path);
+    }
+
+    #[test]
+    fn test_command_output_debug() {
+        let output = CommandOutput {
+            exit_code: 0,
+            stdout:    vec!["line1".to_string()]
+        };
+        let debug = format!("{:?}", output);
+        assert!(debug.contains("CommandOutput"));
+    }
+
+    #[test]
+    fn test_command_output_clone() {
+        let output = CommandOutput {
+            exit_code: 1,
+            stdout:    vec!["error".to_string()]
+        };
+        let cloned = output.clone();
+        assert_eq!(cloned.exit_code, 1);
+        assert_eq!(cloned.stdout.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_execute_command_success() {
+        use std::io::Write;
+
+        use tempfile::NamedTempFile;
+
+        let mut schema_file = NamedTempFile::new().unwrap();
+        writeln!(schema_file, "CREATE TABLE users (id INT PRIMARY KEY);").unwrap();
+
+        let mut queries_file = NamedTempFile::new().unwrap();
+        writeln!(queries_file, "SELECT id FROM users;").unwrap();
+
+        let command = Commands::Analyze {
+            schema:        schema_file.path().to_path_buf(),
+            queries:       queries_file.path().to_path_buf(),
+            provider:      Provider::OpenAI,
+            api_key:       None,
+            model:         None,
+            ollama_url:    "http://localhost:11434".to_string(),
+            dialect:       Dialect::Generic,
+            output_format: Format::Text,
+            verbose:       false,
+            dry_run:       false,
+            no_color:      true
+        };
+
+        let config = Config::default();
+        let result = execute_command(command, config).await.unwrap();
+        assert_eq!(result.exit_code, 0);
+        assert!(!result.stdout.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_execute_command_dry_run() {
+        use std::io::Write;
+
+        use tempfile::NamedTempFile;
+
+        let mut schema_file = NamedTempFile::new().unwrap();
+        writeln!(schema_file, "CREATE TABLE test (id INT);").unwrap();
+
+        let mut queries_file = NamedTempFile::new().unwrap();
+        writeln!(queries_file, "SELECT * FROM test;").unwrap();
+
+        let command = Commands::Analyze {
+            schema:        schema_file.path().to_path_buf(),
+            queries:       queries_file.path().to_path_buf(),
+            provider:      Provider::OpenAI,
+            api_key:       None,
+            model:         None,
+            ollama_url:    "http://localhost:11434".to_string(),
+            dialect:       Dialect::Generic,
+            output_format: Format::Text,
+            verbose:       false,
+            dry_run:       true,
+            no_color:      true
+        };
+
+        let config = Config::default();
+        let result = execute_command(command, config).await.unwrap();
+        let output = result.stdout.join("\n");
+        assert!(output.contains("DRY RUN"));
+        assert!(output.contains("Schema Summary"));
+        assert!(output.contains("Queries Summary"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_command_file_not_found() {
+        use std::path::PathBuf;
+
+        let command = Commands::Analyze {
+            schema:        PathBuf::from("/nonexistent/schema.sql"),
+            queries:       PathBuf::from("/nonexistent/queries.sql"),
+            provider:      Provider::OpenAI,
+            api_key:       None,
+            model:         None,
+            ollama_url:    "http://localhost:11434".to_string(),
+            dialect:       Dialect::Generic,
+            output_format: Format::Text,
+            verbose:       false,
+            dry_run:       false,
+            no_color:      true
+        };
+
+        let config = Config::default();
+        let result = execute_command(command, config).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_execute_command_with_violations() {
+        use std::io::Write;
+
+        use tempfile::NamedTempFile;
+
+        let mut schema_file = NamedTempFile::new().unwrap();
+        writeln!(schema_file, "CREATE TABLE orders (id INT);").unwrap();
+
+        let mut queries_file = NamedTempFile::new().unwrap();
+        writeln!(queries_file, "SELECT * FROM orders;").unwrap();
+
+        let command = Commands::Analyze {
+            schema:        schema_file.path().to_path_buf(),
+            queries:       queries_file.path().to_path_buf(),
+            provider:      Provider::OpenAI,
+            api_key:       None,
+            model:         None,
+            ollama_url:    "http://localhost:11434".to_string(),
+            dialect:       Dialect::Generic,
+            output_format: Format::Text,
+            verbose:       false,
+            dry_run:       false,
+            no_color:      true
+        };
+
+        let config = Config::default();
+        let result = execute_command(command, config).await.unwrap();
+        assert!(result.exit_code >= 0);
+    }
+
+    #[tokio::test]
+    async fn test_execute_command_json_format() {
+        use std::io::Write;
+
+        use tempfile::NamedTempFile;
+
+        let mut schema_file = NamedTempFile::new().unwrap();
+        writeln!(schema_file, "CREATE TABLE items (id INT PRIMARY KEY);").unwrap();
+
+        let mut queries_file = NamedTempFile::new().unwrap();
+        writeln!(queries_file, "SELECT id FROM items;").unwrap();
+
+        let command = Commands::Analyze {
+            schema:        schema_file.path().to_path_buf(),
+            queries:       queries_file.path().to_path_buf(),
+            provider:      Provider::OpenAI,
+            api_key:       None,
+            model:         None,
+            ollama_url:    "http://localhost:11434".to_string(),
+            dialect:       Dialect::Generic,
+            output_format: Format::Json,
+            verbose:       false,
+            dry_run:       false,
+            no_color:      true
+        };
+
+        let config = Config::default();
+        let result = execute_command(command, config).await.unwrap();
+        let output = result.stdout.join("");
+        assert!(output.contains("{") || output.contains("queries_analyzed"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_command_verbose() {
+        use std::io::Write;
+
+        use tempfile::NamedTempFile;
+
+        let mut schema_file = NamedTempFile::new().unwrap();
+        writeln!(schema_file, "CREATE TABLE logs (id INT);").unwrap();
+
+        let mut queries_file = NamedTempFile::new().unwrap();
+        writeln!(queries_file, "SELECT id FROM logs;").unwrap();
+
+        let command = Commands::Analyze {
+            schema:        schema_file.path().to_path_buf(),
+            queries:       queries_file.path().to_path_buf(),
+            provider:      Provider::OpenAI,
+            api_key:       None,
+            model:         None,
+            ollama_url:    "http://localhost:11434".to_string(),
+            dialect:       Dialect::Generic,
+            output_format: Format::Text,
+            verbose:       true,
+            dry_run:       false,
+            no_color:      true
+        };
+
+        let config = Config::default();
+        let result = execute_command(command, config).await.unwrap();
+        assert!(!result.stdout.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_execute_command_yaml_format() {
+        use std::io::Write;
+
+        use tempfile::NamedTempFile;
+
+        let mut schema_file = NamedTempFile::new().unwrap();
+        writeln!(schema_file, "CREATE TABLE events (id INT);").unwrap();
+
+        let mut queries_file = NamedTempFile::new().unwrap();
+        writeln!(queries_file, "SELECT id FROM events;").unwrap();
+
+        let command = Commands::Analyze {
+            schema:        schema_file.path().to_path_buf(),
+            queries:       queries_file.path().to_path_buf(),
+            provider:      Provider::OpenAI,
+            api_key:       None,
+            model:         None,
+            ollama_url:    "http://localhost:11434".to_string(),
+            dialect:       Dialect::Generic,
+            output_format: Format::Yaml,
+            verbose:       false,
+            dry_run:       false,
+            no_color:      true
+        };
+
+        let config = Config::default();
+        let result = execute_command(command, config).await.unwrap();
+        assert!(!result.stdout.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_execute_command_sarif_format() {
+        use std::io::Write;
+
+        use tempfile::NamedTempFile;
+
+        let mut schema_file = NamedTempFile::new().unwrap();
+        writeln!(schema_file, "CREATE TABLE metrics (id INT);").unwrap();
+
+        let mut queries_file = NamedTempFile::new().unwrap();
+        writeln!(queries_file, "SELECT id FROM metrics;").unwrap();
+
+        let command = Commands::Analyze {
+            schema:        schema_file.path().to_path_buf(),
+            queries:       queries_file.path().to_path_buf(),
+            provider:      Provider::OpenAI,
+            api_key:       None,
+            model:         None,
+            ollama_url:    "http://localhost:11434".to_string(),
+            dialect:       Dialect::Generic,
+            output_format: Format::Sarif,
+            verbose:       false,
+            dry_run:       false,
+            no_color:      true
+        };
+
+        let config = Config::default();
+        let result = execute_command(command, config).await.unwrap();
+        let output = result.stdout.join("");
+        assert!(output.contains("sarif") || output.contains("$schema"));
     }
 }

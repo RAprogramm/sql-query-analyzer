@@ -44,6 +44,11 @@ compact_str = { version = "0.9", features = ["serde"] }
 rayon = "1.11"
 regex = "1.11"
 
+[dev-dependencies]
+tempfile = "3.19"
+assert_cmd = "2.0"
+predicates = "3.1"
+
 [profile.release]
 lto = true
 codegen-units = 1
