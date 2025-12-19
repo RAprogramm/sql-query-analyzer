@@ -8,10 +8,10 @@
 //!
 //! The application logic is organized into focused submodules:
 //!
-//! - [`types`]: Core data structures for command parameters and results
-//! - [`convert`]: Type conversion between CLI and internal representations
-//! - [`helpers`]: Utility functions for common operations
-//! - [`analyze`]: SQL analysis execution logic
+//! - `types`: Core data structures for command parameters and results
+//! - `convert`: Type conversion between CLI and internal representations
+//! - `helpers`: Utility functions for common operations
+//! - `analyze`: SQL analysis execution logic
 //!
 //! # Architecture
 //!

@@ -2,12 +2,12 @@
 
 use std::io::Write;
 
-use assert_cmd::Command;
+use assert_cmd::{cargo::cargo_bin_cmd, Command};
 use predicates::prelude::*;
 use tempfile::NamedTempFile;
 
 fn cmd() -> Command {
-    Command::cargo_bin("sql-query-analyzer").unwrap()
+    cargo_bin_cmd!("sql-query-analyzer")
 }
 
 #[test]

@@ -1435,7 +1435,7 @@ dependencies = [
 
 [[package]]
 name = "sql_query_analyzer"
-version = "0.4.1"
+version = "0.5.1"
 dependencies = [
  "assert_cmd",
  "clap",
