@@ -37,7 +37,7 @@ toml = "0.9"
 masterror = "0.26"
 sqlparser = "0.60"
 smallvec = { version = "1.15", features = ["serde"] }
-indexmap = { version = "2.12", features = ["serde"] }
+indexmap = { version = "2.13", features = ["serde"] }
 colored = "3"
 indicatif = "0.18"
 compact_str = { version = "0.9", features = ["serde"] }
@@ -46,7 +46,7 @@ regex = "1.11"
 
 [dev-dependencies]
 tempfile = "3.24"
-assert_cmd = "2.0"
+assert_cmd = "2.1"
 predicates = "3.1"
 
 [profile.release]
