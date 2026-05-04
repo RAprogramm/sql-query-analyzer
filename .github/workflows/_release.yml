@@ -30,12 +30,12 @@ jobs:
         env:
           OUTPUT: RELEASE_NOTES.md
 
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ inputs.version }}
           body_path: RELEASE_NOTES.md
