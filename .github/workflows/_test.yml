@@ -32,7 +32,7 @@ jobs:
         run: cargo nextest run --all-features --profile ci
         continue-on-error: true
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov.info
