@@ -25,7 +25,7 @@ jobs:
       deps: ${{ steps.filter.outputs.deps }}
       reuse: ${{ steps.filter.outputs.reuse }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 2
       - uses: dorny/paths-filter@v4
