@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     if: inputs.rust_changed == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Get MSRV from Cargo.toml
         id: msrv
         run: echo "version=$(grep '^rust-version' Cargo.toml | sed 's/.*= *\"\([^\"]*\)\".*/\1/')" >> $GITHUB_OUTPUT

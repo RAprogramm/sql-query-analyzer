@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     if: inputs.deps_changed == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
