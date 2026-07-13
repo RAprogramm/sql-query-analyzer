@@ -16,8 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     if: inputs.rust_changed == 'true'
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88 # master
+        with:
+          toolchain: nightly
           components: rustfmt
       - run: cargo +nightly fmt --all -- --check

@@ -17,26 +17,71 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Generate release notes
-        uses: orhun/git-cliff-action@v4
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
         with:
           config: cliff.toml
           args: --verbose --latest --strip header
         env:
           OUTPUT: RELEASE_NOTES.md
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts
 
+      - name: Package crate
+        run: cargo package --no-verify --allow-dirty
+
+      - name: Locate .crate file
+        id: artefact
+        run: |
+          set -euo pipefail
+          crate=$(find target/package -maxdepth 1 -name '*.crate' -print -quit)
+          if [ -z "$crate" ]; then
+            echo "::error::No .crate file produced under target/package" >&2
+            exit 1
+          fi
+          echo "path=$crate" >> "$GITHUB_OUTPUT"
+
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          path: ./
+          format: cyclonedx-json
+          output-file: sql-query-analyzer-sbom.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate build provenance attestation
+        id: attest
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: |
+            ${{ steps.artefact.outputs.path }}
+            sql-query-analyzer-sbom.cdx.json
+
+      - name: Stage provenance bundle
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: cp "$BUNDLE" sql-query-analyzer-provenance.sigstore.json
+
       - name: Create Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           tag_name: v${{ inputs.version }}
           body_path: RELEASE_NOTES.md
-          files: artifacts/**/*
+          files: |
+            artifacts/**/*
+            sql-query-analyzer-sbom.cdx.json
+            sql-query-analyzer-provenance.sigstore.json
+            ${{ steps.artefact.outputs.path }}

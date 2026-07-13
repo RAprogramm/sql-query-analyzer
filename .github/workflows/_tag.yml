@@ -21,9 +21,10 @@ jobs:
       new_tag: ${{ steps.check.outputs.new_tag }}
       version: ${{ steps.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Check for new version
         id: check
@@ -44,5 +45,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ steps.check.outputs.version }}" -m "Release v${{ steps.check.outputs.version }}"
-          git push origin "v${{ steps.check.outputs.version }}"
+          git tag -a "v${STEPS_CHECK_OUTPUTS_VERSION}" -m "Release v${STEPS_CHECK_OUTPUTS_VERSION}"
+          git push origin "v${STEPS_CHECK_OUTPUTS_VERSION}"
+        env:
+          STEPS_CHECK_OUTPUTS_VERSION: ${{ steps.check.outputs.version }}

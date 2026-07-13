@@ -25,10 +25,11 @@ jobs:
       deps: ${{ steps.filter.outputs.deps }}
       reuse: ${{ steps.filter.outputs.reuse }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 2
-      - uses: dorny/paths-filter@v4
+          persist-credentials: false
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
         with:
           filters: |
@@ -50,6 +51,10 @@ jobs:
               - '**/*.md'
       - name: Debug outputs
         run: |
-          echo "rust=${{ steps.filter.outputs.rust }}"
-          echo "deps=${{ steps.filter.outputs.deps }}"
-          echo "reuse=${{ steps.filter.outputs.reuse }}"
+          echo "rust=${STEPS_FILTER_OUTPUTS_RUST}"
+          echo "deps=${STEPS_FILTER_OUTPUTS_DEPS}"
+          echo "reuse=${STEPS_FILTER_OUTPUTS_REUSE}"
+        env:
+          STEPS_FILTER_OUTPUTS_RUST: ${{ steps.filter.outputs.rust }}
+          STEPS_FILTER_OUTPUTS_DEPS: ${{ steps.filter.outputs.deps }}
+          STEPS_FILTER_OUTPUTS_REUSE: ${{ steps.filter.outputs.reuse }}
