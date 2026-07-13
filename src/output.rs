@@ -281,8 +281,10 @@ fn format_text_analysis(report: &AnalysisReport, opts: &OutputOptions) -> String
             }
         };
         output.push_str(&format!(
-            "  [{:>5}] {}: {}\n",
-            severity_str, violation.rule_id, violation.message
+            "  [{severity:>5}] {rule_id}: {message}\n",
+            severity = severity_str,
+            rule_id = violation.rule_id,
+            message = violation.message
         ));
         if let Some(suggestion) = &violation.suggestion {
             let suggestion_line = format!("         → {}\n", suggestion);

@@ -3,6 +3,7 @@
 use std::io::Write;
 
 use assert_cmd::{Command, cargo::cargo_bin_cmd};
+use predicate::str::contains;
 use predicates::prelude::*;
 use tempfile::NamedTempFile;
 
@@ -14,10 +15,8 @@ fn cmd() -> Command {
 fn test_analyze_success() {
     let mut schema = NamedTempFile::new().unwrap();
     writeln!(schema, "CREATE TABLE users (id INT PRIMARY KEY);").unwrap();
-
     let mut queries = NamedTempFile::new().unwrap();
     writeln!(queries, "SELECT id FROM users;").unwrap();
-
     cmd()
         .args([
             "analyze",
@@ -37,10 +36,8 @@ fn test_analyze_success() {
 fn test_analyze_with_violations() {
     let mut schema = NamedTempFile::new().unwrap();
     writeln!(schema, "CREATE TABLE orders (id INT);").unwrap();
-
     let mut queries = NamedTempFile::new().unwrap();
     writeln!(queries, "SELECT * FROM orders;").unwrap();
-
     cmd()
         .args([
             "analyze",
@@ -53,7 +50,7 @@ fn test_analyze_with_violations() {
             "--no-color"
         ])
         .assert()
-        .stdout(predicate::str::contains("STYLE001").or(predicate::str::contains("PERF")));
+        .stdout(contains("STYLE001").or(contains("PERF")));
 }
 
 #[test]
@@ -70,17 +67,15 @@ fn test_analyze_file_not_found() {
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("Error"));
+        .stderr(contains("Error"));
 }
 
 #[test]
 fn test_analyze_dry_run() {
     let mut schema = NamedTempFile::new().unwrap();
     writeln!(schema, "CREATE TABLE t (id INT);").unwrap();
-
     let mut queries = NamedTempFile::new().unwrap();
     writeln!(queries, "SELECT id FROM t;").unwrap();
-
     cmd()
         .args([
             "analyze",
@@ -95,17 +90,15 @@ fn test_analyze_dry_run() {
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains("DRY RUN"));
+        .stdout(contains("DRY RUN"));
 }
 
 #[test]
 fn test_analyze_json_format() {
     let mut schema = NamedTempFile::new().unwrap();
     writeln!(schema, "CREATE TABLE items (id INT);").unwrap();
-
     let mut queries = NamedTempFile::new().unwrap();
     writeln!(queries, "SELECT id FROM items;").unwrap();
-
     cmd()
         .args([
             "analyze",
@@ -121,17 +114,15 @@ fn test_analyze_json_format() {
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains("{"));
+        .stdout(contains("{"));
 }
 
 #[test]
 fn test_analyze_yaml_format() {
     let mut schema = NamedTempFile::new().unwrap();
     writeln!(schema, "CREATE TABLE events (id INT);").unwrap();
-
     let mut queries = NamedTempFile::new().unwrap();
     writeln!(queries, "SELECT id FROM events;").unwrap();
-
     cmd()
         .args([
             "analyze",
@@ -153,10 +144,8 @@ fn test_analyze_yaml_format() {
 fn test_analyze_sarif_format() {
     let mut schema = NamedTempFile::new().unwrap();
     writeln!(schema, "CREATE TABLE metrics (id INT);").unwrap();
-
     let mut queries = NamedTempFile::new().unwrap();
     writeln!(queries, "SELECT id FROM metrics;").unwrap();
-
     cmd()
         .args([
             "analyze",
@@ -172,7 +161,7 @@ fn test_analyze_sarif_format() {
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains("$schema"));
+        .stdout(contains("$schema"));
 }
 
 #[test]
@@ -189,10 +178,8 @@ fn test_version() {
 fn test_analyze_verbose() {
     let mut schema = NamedTempFile::new().unwrap();
     writeln!(schema, "CREATE TABLE logs (id INT);").unwrap();
-
     let mut queries = NamedTempFile::new().unwrap();
     writeln!(queries, "SELECT id FROM logs;").unwrap();
-
     cmd()
         .args([
             "analyze",
@@ -213,10 +200,8 @@ fn test_analyze_verbose() {
 fn test_analyze_mysql_dialect() {
     let mut schema = NamedTempFile::new().unwrap();
     writeln!(schema, "CREATE TABLE t (id INT PRIMARY KEY);").unwrap();
-
     let mut queries = NamedTempFile::new().unwrap();
     writeln!(queries, "SELECT id FROM t;").unwrap();
-
     cmd()
         .args([
             "analyze",
@@ -242,10 +227,8 @@ fn test_analyze_clickhouse_dialect() {
         "CREATE TABLE t (id UInt64) ENGINE = MergeTree ORDER BY id;"
     )
     .unwrap();
-
     let mut queries = NamedTempFile::new().unwrap();
     writeln!(queries, "SELECT id FROM t;").unwrap();
-
     cmd()
         .args([
             "analyze",

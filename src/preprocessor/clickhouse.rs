@@ -68,19 +68,15 @@ static SETTING_PAIR_REGEX: LazyLock<Regex> =
 pub fn preprocess(sql: &str) -> PreprocessorResult {
     let mut metadata = PreprocessorMetadata::default();
     let mut result = sql.to_string();
-
     extract_codecs(&result, &mut metadata);
     extract_ttl(&result, &mut metadata);
     extract_settings(&result, &mut metadata);
     extract_partition_by(&result, &mut metadata);
-
     result = remove_codecs(&result);
     result = remove_ttl(&result);
     result = remove_settings(&result);
     result = remove_partition_by(&result);
-
     result = normalize_whitespace(&result);
-
     PreprocessorResult {
         sql: result,
         metadata
@@ -246,13 +242,11 @@ mod tests {
             SETTINGS index_granularity = 8192
         "#;
         let result = preprocess(sql);
-
         assert!(!result.sql.contains("CODEC"));
         assert!(!result.sql.contains("TTL"));
         assert!(!result.sql.contains("SETTINGS"));
         assert!(result.sql.contains("ENGINE = ReplicatedMergeTree"));
         assert!(result.sql.contains("ORDER BY"));
-
         assert_eq!(result.metadata.codecs.len(), 3);
         assert_eq!(result.metadata.ttl_expressions.len(), 1);
         assert_eq!(
