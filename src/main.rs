@@ -197,13 +197,10 @@ mod tests {
     #[tokio::test]
     async fn test_run_success() {
         use std::io::Write;
-
         let mut schema = NamedTempFile::new().unwrap();
         writeln!(schema, "CREATE TABLE t (id INT);").unwrap();
-
         let mut queries = NamedTempFile::new().unwrap();
         writeln!(queries, "SELECT id FROM t;").unwrap();
-
         let cmd = Commands::Analyze {
             schema:        schema.path().to_path_buf(),
             queries:       queries.path().to_path_buf(),
@@ -217,7 +214,6 @@ mod tests {
             dry_run:       false,
             no_color:      true
         };
-
         let result = run(cmd).await.unwrap();
         assert_eq!(result.exit_code, 0);
     }
@@ -237,7 +233,6 @@ mod tests {
             dry_run:       false,
             no_color:      true
         };
-
         let result = run(cmd).await;
         assert!(result.is_err());
     }
@@ -254,13 +249,10 @@ mod tests {
     #[tokio::test]
     async fn test_run_dry_run() {
         use std::io::Write;
-
         let mut schema = NamedTempFile::new().unwrap();
         writeln!(schema, "CREATE TABLE x (id INT);").unwrap();
-
         let mut queries = NamedTempFile::new().unwrap();
         writeln!(queries, "SELECT * FROM x;").unwrap();
-
         let cmd = Commands::Analyze {
             schema:        schema.path().to_path_buf(),
             queries:       queries.path().to_path_buf(),
@@ -274,7 +266,6 @@ mod tests {
             dry_run:       true,
             no_color:      true
         };
-
         let result = run(cmd).await.unwrap();
         let output = result.stdout.join("\n");
         assert!(output.contains("DRY RUN"));
