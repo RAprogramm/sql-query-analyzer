@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 RAprogramm
+# SPDX-License-Identifier: MIT
+
+[book]
+title = "SQL Query Analyzer"
+description = "Static analysis and LLM-powered optimization for SQL queries"
+authors = ["RAprogramm"]
+language = "en"
+src = "src"
+
+[output.html]
+git-repository-url = "https://github.com/RAprogramm/sql-query-analyzer"
+edit-url-template = "https://github.com/RAprogramm/sql-query-analyzer/edit/main/docs/{path}"
+default-theme = "ayu"
+preferred-dark-theme = "ayu"
+
+[output.html.fold]
+enable = true
+level = 1
