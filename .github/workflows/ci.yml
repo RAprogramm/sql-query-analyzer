@@ -226,3 +226,37 @@ jobs:
       new_tag: ${{ needs.should-release.outputs.release }}
     secrets:
       CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+
+  # Aggregate gate: single required status context for branch protection
+  ci-success:
+    name: CI Success
+    needs:
+      [
+        pr-size,
+        detect,
+        fmt,
+        clippy,
+        qual,
+        test,
+        doc,
+        doctest,
+        audit,
+        deny,
+        reuse,
+        msrv,
+        semver,
+        machete,
+        build
+      ]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify no job failed or was cancelled
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "$RESULTS"
+          if echo "$RESULTS" | grep -qE 'failure|cancelled'; then
+            echo "::error::One or more required jobs failed or were cancelled"
+            exit 1
+          fi

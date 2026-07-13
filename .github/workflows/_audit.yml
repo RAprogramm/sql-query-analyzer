@@ -15,6 +15,9 @@ jobs:
     name: Security Audit
     runs-on: ubuntu-latest
     if: inputs.deps_changed == 'true'
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v7
       - uses: rustsec/audit-check@v2

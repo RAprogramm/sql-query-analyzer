@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: 2026 RAprogramm
+# SPDX-License-Identifier: MIT
+
+name: Scheduled Cargo Update
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  cargo-update:
+    name: Update Cargo.lock
+    runs-on: ubuntu-latest
+    if: github.repository == 'RAprogramm/sql-query-analyzer'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Update lockfile
+        run: cargo update 2>&1 | tee /tmp/cargo-update.log
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: automation/cargo-update
+          title: "chore: weekly cargo update of transitive dependencies"
+          commit-message: "chore: cargo update transitive dependencies"
+          body: |
+            Weekly scheduled `cargo update` to keep transitive dependencies
+            fresh and RUSTSEC advisories resolved without waiting for
+            dependabot per-crate PRs.
+          labels: dependencies
+          delete-branch: true
