@@ -98,6 +98,7 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql --provider openai
 | `PERF009` | NOT IN with subquery | Warning | Can cause unexpected NULL behavior |
 | `PERF010` | UNION without ALL | Info | Unnecessary deduplication overhead |
 | `PERF011` | Select without where | Info | Full table scan on large tables |
+| `PERF013` | ORDER BY RAND() | Warning | Full scan and sort regardless of `LIMIT` |
 
 ### Style Rules
 

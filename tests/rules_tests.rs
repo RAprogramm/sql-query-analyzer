@@ -86,6 +86,37 @@ fn test_select_star_style() {
 }
 
 #[test]
+fn test_order_by_rand_mysql() {
+    let violations = analyze_query("SELECT id FROM users ORDER BY RAND() LIMIT 5");
+    assert!(violations.contains(&"PERF013".to_string()));
+}
+
+#[test]
+fn test_order_by_random_postgres() {
+    let violations = analyze_query("SELECT id FROM users ORDER BY RANDOM() LIMIT 5");
+    assert!(violations.contains(&"PERF013".to_string()));
+}
+
+#[test]
+fn test_order_by_newid_mssql() {
+    let violations = analyze_query("SELECT id FROM users ORDER BY NEWID() LIMIT 5");
+    assert!(violations.contains(&"PERF013".to_string()));
+}
+
+#[test]
+fn test_order_by_column_ok() {
+    let violations = analyze_query("SELECT id FROM users WHERE id > 1 ORDER BY id LIMIT 5");
+    assert!(!violations.contains(&"PERF013".to_string()));
+}
+
+#[test]
+fn test_rand_in_where_not_order_by_ok() {
+    let violations =
+        analyze_query("SELECT id FROM users WHERE id >= FLOOR(RAND() * 100) ORDER BY id LIMIT 5");
+    assert!(!violations.contains(&"PERF013".to_string()));
+}
+
+#[test]
 fn test_explicit_columns_ok() {
     let violations = analyze_query("SELECT id, name FROM users LIMIT 10");
     assert!(!violations.contains(&"STYLE001".to_string()));
