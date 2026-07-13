@@ -30,3 +30,20 @@ SELECT users.id, orders.total FROM users JOIN orders ON orders.user_id = users.i
 -- Better
 SELECT u.id, o.total FROM users u JOIN orders o ON o.user_id = u.id;
 ```
+
+## STYLE004 — Ordinal in ORDER BY/GROUP BY (Info)
+
+`ORDER BY 1` sorts by SELECT-list position. Add or reorder selected columns
+and the sort silently changes — no error, just wrong results.
+
+```sql
+-- Flagged
+SELECT name, COUNT(*) FROM users GROUP BY 1;
+SELECT id, name FROM users ORDER BY 1 DESC;
+
+-- Better
+SELECT name, COUNT(*) FROM users GROUP BY name;
+SELECT id, name FROM users ORDER BY id DESC;
+```
+
+Function arguments and `LIMIT`/`OFFSET` counts are not mistaken for ordinals.

@@ -106,6 +106,7 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql --provider openai
 |----|------|----------|-------------|
 | `STYLE001` | Select star | Info | Explicit column list preferred |
 | `STYLE002` | Missing table alias | Info | Multi-table queries should use aliases |
+| `STYLE004` | Ordinal in ORDER BY/GROUP BY | Info | `ORDER BY 1` breaks silently when the SELECT list changes |
 
 ### Security Rules
 

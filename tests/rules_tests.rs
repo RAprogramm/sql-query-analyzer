@@ -86,6 +86,48 @@ fn test_select_star_style() {
 }
 
 #[test]
+fn test_ordinal_in_order_by() {
+    let violations = analyze_query("SELECT id, name FROM users WHERE id > 0 ORDER BY 1 LIMIT 5");
+    assert!(violations.contains(&"STYLE004".to_string()));
+}
+
+#[test]
+fn test_ordinal_in_group_by() {
+    let violations =
+        analyze_query("SELECT name, COUNT(*) FROM users WHERE id > 0 GROUP BY 1 LIMIT 5");
+    assert!(violations.contains(&"STYLE004".to_string()));
+}
+
+#[test]
+fn test_ordinal_in_order_by_list() {
+    let violations =
+        analyze_query("SELECT id, name FROM users WHERE id > 0 ORDER BY name, 2 LIMIT 5");
+    assert!(violations.contains(&"STYLE004".to_string()));
+}
+
+#[test]
+fn test_explicit_order_by_ok() {
+    let violations =
+        analyze_query("SELECT id, name FROM users WHERE id > 0 ORDER BY name DESC LIMIT 5");
+    assert!(!violations.contains(&"STYLE004".to_string()));
+}
+
+#[test]
+fn test_limit_count_not_ordinal() {
+    let violations =
+        analyze_query("SELECT id, name FROM users WHERE id > 0 ORDER BY name LIMIT 1");
+    assert!(!violations.contains(&"STYLE004".to_string()));
+}
+
+#[test]
+fn test_function_args_not_ordinal() {
+    let violations = analyze_query(
+        "SELECT id, name FROM users WHERE id > 0 ORDER BY COALESCE(name, 1) LIMIT 5"
+    );
+    assert!(!violations.contains(&"STYLE004".to_string()));
+}
+
+#[test]
 fn test_order_by_rand_mysql() {
     let violations = analyze_query("SELECT id FROM users ORDER BY RAND() LIMIT 5");
     assert!(violations.contains(&"PERF013".to_string()));
