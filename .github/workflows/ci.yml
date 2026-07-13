@@ -97,6 +97,9 @@ jobs:
   audit:
     needs: detect
     if: always() && needs.detect.result == 'success' && needs.detect.outputs.deps == 'true'
+    permissions:
+      contents: read
+      checks: write
     uses: ./.github/workflows/_audit.yml
     with:
       deps_changed: ${{ needs.detect.outputs.deps }}
