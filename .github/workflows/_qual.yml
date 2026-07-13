@@ -16,8 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     if: inputs.rust_changed == 'true'
     steps:
-      - uses: actions/checkout@v7
-      - uses: RAprogramm/cargo-quality@v0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: RAprogramm/cargo-quality@c39e3171d7dc7897690f1e0e103b1c97761059c6 # v0.4.1
         with:
           path: .
           fail_on_issues: 'true'

@@ -8,6 +8,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -26,10 +29,11 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
-      - uses: RAprogramm/rust-prod-diff-checker@v1
+          persist-credentials: false
+      - uses: RAprogramm/rust-prod-diff-checker@887eced80cb9047d3fc202120f7d1cc484c8186b # v1.6.0
         with:
           max_prod_lines: '200'
           output_format: github
@@ -194,13 +198,16 @@ jobs:
       - name: Check if new tag
         id: check
         run: |
-          echo "new_tag='${{ needs.tag.outputs.new_tag }}'"
-          echo "version='${{ needs.tag.outputs.version }}'"
-          if [ "${{ needs.tag.outputs.new_tag }}" = "true" ]; then
+          echo "new_tag='${NEEDS_TAG_OUTPUTS_NEW_TAG}'"
+          echo "version='${NEEDS_TAG_OUTPUTS_VERSION}'"
+          if [ "${NEEDS_TAG_OUTPUTS_NEW_TAG}" = "true" ]; then
             echo "release=true" >> $GITHUB_OUTPUT
           else
             echo "release=false" >> $GITHUB_OUTPUT
           fi
+        env:
+          NEEDS_TAG_OUTPUTS_NEW_TAG: ${{ needs.tag.outputs.new_tag }}
+          NEEDS_TAG_OUTPUTS_VERSION: ${{ needs.tag.outputs.version }}
 
   # Stage 7: Release builds (only if new tag)
   release-build:

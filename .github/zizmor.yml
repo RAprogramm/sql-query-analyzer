@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 RAprogramm
+# SPDX-License-Identifier: MIT
+
+# zizmor configuration. Each ignore below is a reviewed, deliberate
+# exception — not a suppression of an unread finding.
+
+rules:
+  # crates.io trusted publishing is not configured for this crate yet;
+  # publishing authenticates with a scoped CRATES_IO_TOKEN secret.
+  use-trusted-publishing:
+    ignore:
+      - _publish.yml
+
+  # softprops/action-gh-release creates the release from generated notes
+  # and attaches multiple asset globs in a single declarative step; the
+  # equivalent gh-cli script adds more surface than it removes.
+  superfluous-actions:
+    ignore:
+      - _release.yml
