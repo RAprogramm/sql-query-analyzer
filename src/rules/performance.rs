@@ -366,6 +366,54 @@ impl Rule for MissingJoinCondition {
     }
 }
 
+/// ORDER BY RAND() forces a full scan and sort of every candidate row
+///
+/// The database must generate a random value per row and sort the whole
+/// result set before applying LIMIT, so cost stays O(n log n) regardless
+/// of how few rows are returned. Detects the MySQL, PostgreSQL, SQL Server,
+/// and Oracle spellings.
+pub struct OrderByRandom;
+
+impl Rule for OrderByRandom {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "PERF013",
+            name:     "ORDER BY RAND() detected",
+            severity: Severity::Warning,
+            category: RuleCategory::Performance
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        if query.query_type != QueryType::Select {
+            return vec![];
+        }
+        let upper = query.raw.to_uppercase();
+        let Some(order_pos) = upper.find("ORDER BY") else {
+            return vec![];
+        };
+        let order_part = &upper[order_pos..];
+        let random_funcs = ["RAND()", "RANDOM()", "NEWID()", "DBMS_RANDOM"];
+        if random_funcs.iter().any(|f| order_part.contains(f)) {
+            let info = self.info();
+            return vec![Violation {
+                rule_id: info.id,
+                rule_name: info.name,
+                message: "ORDER BY RAND() scans and sorts every row before applying LIMIT"
+                    .to_string(),
+                severity: info.severity,
+                category: info.category,
+                suggestion: Some(
+                    "For random selection use a random id range (WHERE id >= FLOOR(RAND() * max_id)) or a pre-generated indexed random column"
+                        .to_string()
+                ),
+                query_index
+            }];
+        }
+        vec![]
+    }
+}
+
 /// DISTINCT with ORDER BY can be inefficient
 pub struct DistinctWithOrderBy;
 

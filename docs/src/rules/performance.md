@@ -112,3 +112,22 @@ impossible or acceptable.
 ## PERF011 — SELECT without WHERE or LIMIT (Info)
 
 Full table scan; intentional only for small reference tables.
+
+## PERF013 — ORDER BY RAND() (Warning)
+
+The database generates a random value for every row and sorts the whole set
+before applying `LIMIT` — O(n log n) regardless of how few rows are returned.
+Detects `RAND()`, `RANDOM()`, `NEWID()`, and `DBMS_RANDOM`.
+
+```sql
+-- Flagged
+SELECT * FROM products ORDER BY RAND() LIMIT 5;
+
+-- Better: random id range
+SELECT * FROM products
+WHERE id >= FLOOR(RAND() * (SELECT MAX(id) FROM products))
+LIMIT 5;
+
+-- Better: pre-generated indexed random column
+SELECT * FROM products ORDER BY random_sort LIMIT 5;
+```
