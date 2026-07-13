@@ -17,6 +17,10 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -34,9 +38,49 @@ jobs:
         with:
           path: artifacts
 
+      - name: Package crate
+        run: cargo package --no-verify --allow-dirty
+
+      - name: Locate .crate file
+        id: artefact
+        run: |
+          set -euo pipefail
+          crate=$(find target/package -maxdepth 1 -name '*.crate' -print -quit)
+          if [ -z "$crate" ]; then
+            echo "::error::No .crate file produced under target/package" >&2
+            exit 1
+          fi
+          echo "path=$crate" >> "$GITHUB_OUTPUT"
+
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: ./
+          format: cyclonedx-json
+          output-file: sql-query-analyzer-sbom.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate build provenance attestation
+        id: attest
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            ${{ steps.artefact.outputs.path }}
+            sql-query-analyzer-sbom.cdx.json
+
+      - name: Stage provenance bundle
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: cp "$BUNDLE" sql-query-analyzer-provenance.sigstore.json
+
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ inputs.version }}
           body_path: RELEASE_NOTES.md
-          files: artifacts/**/*
+          files: |
+            artifacts/**/*
+            sql-query-analyzer-sbom.cdx.json
+            sql-query-analyzer-provenance.sigstore.json
+            ${{ steps.artefact.outputs.path }}
