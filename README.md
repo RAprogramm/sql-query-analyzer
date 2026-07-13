@@ -116,6 +116,7 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql --provider openai
 | `SEC002` | Missing WHERE in DELETE | Error | Potentially dangerous bulk delete |
 | `SEC003` | TRUNCATE detected | Error | Instant data deletion without logging |
 | `SEC004` | DROP detected | Error | Permanent data/schema destruction |
+| `SEC006` | SQL injection pattern | Error | Always-true `OR` tautology (`OR 1 = 1`) |
 
 ### Schema-Aware Rules
 

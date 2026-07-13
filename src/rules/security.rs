@@ -123,6 +123,75 @@ impl Rule for DropDetected {
     }
 }
 
+/// Detects tautology patterns associated with SQL injection
+///
+/// A comparison of two identical literals joined by OR (`OR 1 = 1`,
+/// `OR '1' = '1'`, `OR '' = ''`) is always true and almost never appears in
+/// legitimate queries; it is the classic fingerprint of injected input that
+/// widens a WHERE clause to match every row. Comment-marker and
+/// statement-stacking heuristics are handled before parsing: the analyzer
+/// receives statements re-serialized from the AST, where comments are
+/// already stripped and stacked statements are split apart.
+pub struct InjectionTautology;
+
+/// Returns true for tokens the tautology check treats as literals:
+/// single-quoted strings and bare integers.
+fn is_literal_token(tok: &str) -> bool {
+    (tok.starts_with('\'') && tok.ends_with('\'') && tok.len() >= 2)
+        || (!tok.is_empty() && tok.chars().all(|c| c.is_ascii_digit()))
+}
+
+/// Returns true when any `OR a = b` with identical literal operands
+/// appears in the uppercased query text.
+fn has_or_tautology(upper: &str) -> bool {
+    let mut search_from = 0;
+    while let Some(pos) = upper[search_from..].find(" OR ") {
+        let rest = &upper[search_from + pos + 4..];
+        let mut toks = rest.split_whitespace();
+        if let (Some(a), Some(op), Some(b)) = (toks.next(), toks.next(), toks.next())
+            && op == "="
+            && a == b
+            && is_literal_token(a)
+        {
+            return true;
+        }
+        search_from += pos + 4;
+    }
+    false
+}
+
+impl Rule for InjectionTautology {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "SEC006",
+            name:     "Potential SQL injection pattern",
+            severity: Severity::Error,
+            category: RuleCategory::Security
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        let upper = query.raw.to_uppercase();
+        if !has_or_tautology(&upper) {
+            return vec![];
+        }
+        let info = self.info();
+        vec![Violation {
+            rule_id: info.id,
+            rule_name: info.name,
+            message: "Query contains an always-true OR tautology, a classic SQL injection pattern"
+                .to_string(),
+            severity: info.severity,
+            category: info.category,
+            suggestion: Some(
+                "If this query is built in application code, replace string concatenation with parameterized queries"
+                    .to_string()
+            ),
+            query_index
+        }]
+    }
+}
+
 /// DELETE without WHERE affects all rows
 pub struct MissingWhereInDelete;
 

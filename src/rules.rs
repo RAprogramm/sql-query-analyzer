@@ -25,7 +25,7 @@
 //!
 //! - **Performance** (`PERF001`-`PERF013`) - Query optimization issues
 //! - **Style** (`STYLE001`-`STYLE004`) - Best practice violations
-//! - **Security** (`SEC001`-`SEC004`) - Dangerous operations
+//! - **Security** (`SEC001`-`SEC006`) - Dangerous operations
 //! - **Schema** (`SCHEMA001`-`SCHEMA003`) - Schema validation (requires schema)
 //!
 //! # Configuration
@@ -185,7 +185,7 @@ impl RuleRunner {
     ///
     /// - Performance rules (PERF001-PERF013) detect query optimization issues
     /// - Style rules (STYLE001-STYLE004) enforce best practices
-    /// - Security rules (SEC001-SEC004) detect dangerous operations
+    /// - Security rules (SEC001-SEC006) detect dangerous operations
     pub fn with_config(config: RulesConfig) -> Self {
         let all_rules: Vec<Box<dyn Rule>> = vec![
             Box::new(performance::SelectStarWithoutLimit),
@@ -207,6 +207,7 @@ impl RuleRunner {
             Box::new(security::MissingWhereInDelete),
             Box::new(security::TruncateDetected),
             Box::new(security::DropDetected),
+            Box::new(security::InjectionTautology),
         ];
         let rules: Vec<Box<dyn Rule>> = all_rules
             .into_iter()
