@@ -17,7 +17,7 @@ jobs:
     if: inputs.rust_changed == 'true'
     steps:
       - uses: actions/checkout@v7
-      - uses: RAprogramm/cargo-quality@v0
+      - uses: RAprogramm/cargo-quality@v0.3.0
         with:
           path: .
           fail_on_issues: 'true'
