@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT
 
 # Rules Overview
 
-29 built-in rules across four categories. Every rule has a stable ID, a default
+30 built-in rules across four categories. Every rule has a stable ID, a default
 severity, and a suggestion attached to each violation. Rules can be disabled or
 re-weighted via [configuration](../configuration.md).
 

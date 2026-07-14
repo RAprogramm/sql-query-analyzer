@@ -152,6 +152,36 @@ fn test_select_without_count_not_perf012() {
 }
 
 #[test]
+fn test_distinct_with_join_flagged() {
+    let violations = analyze_query(
+        "SELECT DISTINCT u.name FROM users u JOIN orders o ON o.user_id = u.id WHERE u.id > 0 LIMIT 10"
+    );
+    assert!(violations.contains(&"PERF014".to_string()));
+}
+
+#[test]
+fn test_distinct_star_is_warning() {
+    let queries = parse_queries(
+        "SELECT DISTINCT * FROM users u JOIN orders o ON o.user_id = u.id WHERE u.id > 0 LIMIT 10",
+        SqlDialect::Generic
+    )
+    .unwrap();
+    let report = RuleRunner::new().analyze(&queries);
+    let violation = report
+        .violations
+        .iter()
+        .find(|v| v.rule_id == "PERF014")
+        .unwrap();
+    assert_eq!(violation.severity, Severity::Warning);
+}
+
+#[test]
+fn test_distinct_single_table_ok() {
+    let violations = analyze_query("SELECT DISTINCT status FROM orders WHERE id > 0 LIMIT 10");
+    assert!(!violations.contains(&"PERF014".to_string()));
+}
+
+#[test]
 fn test_having_without_aggregate_flagged() {
     let violations = analyze_query(
         "SELECT status, COUNT(*) FROM orders WHERE id > 0 GROUP BY status HAVING status = 'active' LIMIT 10"

@@ -203,6 +203,7 @@ impl RuleRunner {
             Box::new(performance::CountWithoutWhere),
             Box::new(performance::LargeInClause),
             Box::new(performance::HavingWithoutAggregate),
+            Box::new(performance::UnnecessaryDistinct),
             Box::new(style::SelectStar),
             Box::new(style::MissingTableAlias),
             Box::new(style::OrdinalInOrderOrGroupBy),

@@ -148,6 +148,23 @@ LIMIT 5;
 SELECT * FROM products ORDER BY random_sort LIMIT 5;
 ```
 
+## PERF014 — Potentially unnecessary DISTINCT (Info)
+
+`DISTINCT` combined with `JOIN` usually hides duplicate rows produced by join
+fan-out; deduplication then costs a sort or hash over the whole result.
+`SELECT DISTINCT *` escalates to Warning.
+
+```sql
+-- Flagged (Info): fix the join instead of deduplicating
+SELECT DISTINCT u.name FROM users u JOIN orders o ON o.user_id = u.id;
+
+-- Flagged (Warning)
+SELECT DISTINCT * FROM users u JOIN orders o ON o.user_id = u.id;
+
+-- Not flagged: unique-value enumeration on one table
+SELECT DISTINCT status FROM orders;
+```
+
 ## PERF018 — HAVING without aggregate (Warning)
 
 `HAVING` filters after grouping; a condition on plain columns forces the
