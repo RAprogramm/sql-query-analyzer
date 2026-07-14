@@ -117,6 +117,7 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql --provider openai
 | `SEC003` | TRUNCATE detected | Error | Instant data deletion without logging |
 | `SEC004` | DROP detected | Error | Permanent data/schema destruction |
 | `SEC006` | SQL injection pattern | Error | Always-true `OR` tautology (`OR 1 = 1`) |
+| `SEC008` | Hardcoded credential | Error | Plaintext secret in `IDENTIFIED BY`, `SET PASSWORD`, or a sensitive column |
 
 ### Schema-Aware Rules
 

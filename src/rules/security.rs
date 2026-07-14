@@ -123,6 +123,120 @@ impl Rule for DropDetected {
     }
 }
 
+/// Detects plaintext credentials embedded in SQL statements
+///
+/// Secrets committed inside query files leak through source control, slow
+/// query logs, and error logs, and violate PCI-DSS/SOC2/HIPAA plaintext
+/// storage rules. Flags `IDENTIFIED BY`/`WITH PASSWORD`/`SET PASSWORD`
+/// clauses and string literals assigned or inserted into sensitive columns
+/// (password, secret, api_key, token, and similar).
+pub struct HardcodedCredential;
+
+const SENSITIVE_COLUMNS: [&str; 9] = [
+    "PASSWORD",
+    "PASSWD",
+    "PWD",
+    "SECRET",
+    "API_KEY",
+    "APIKEY",
+    "TOKEN",
+    "AUTH",
+    "CREDENTIAL"
+];
+
+/// Returns true when `upper` contains `name` ending at a word boundary,
+/// where the tail continues (skipping whitespace) with `next`. Prefixes are
+/// deliberately allowed so `user_password = '...'` still matches.
+fn sensitive_name_followed_by(upper: &str, name: &str, next: char) -> bool {
+    upper.match_indices(name).any(|(pos, _)| {
+        let after = &upper[pos + name.len()..];
+        let mut chars = after.chars();
+        match chars.next() {
+            Some(c) if c.is_ascii_alphanumeric() || c == '_' => return false,
+            None => return false,
+            _ => {}
+        }
+        after
+            .trim_start_matches(|c: char| c.is_whitespace())
+            .starts_with(next)
+    })
+}
+
+/// Returns true when a sensitive column is assigned a string literal
+/// (`password = 'plaintext'`) anywhere in the statement.
+fn has_sensitive_assignment(upper: &str) -> bool {
+    SENSITIVE_COLUMNS.iter().any(|col| {
+        upper.match_indices(col).any(|(pos, _)| {
+            let after = &upper[pos + col.len()..];
+            let mut rest = after.trim_start();
+            match after.chars().next() {
+                Some(c) if c.is_ascii_alphanumeric() || c == '_' => return false,
+                None => return false,
+                _ => {}
+            }
+            if !rest.starts_with('=') {
+                return false;
+            }
+            rest = rest[1..].trim_start();
+            rest.starts_with('\'')
+        })
+    })
+}
+
+/// Returns true when an INSERT names a sensitive column before VALUES and
+/// supplies at least one string literal.
+fn has_sensitive_insert(query: &Query, upper: &str) -> bool {
+    if query.query_type != QueryType::Insert {
+        return false;
+    }
+    let Some(values_pos) = upper.find(" VALUES") else {
+        return false;
+    };
+    let (columns_part, values_part) = upper.split_at(values_pos);
+    values_part.contains('\'')
+        && SENSITIVE_COLUMNS.iter().any(|col| {
+            sensitive_name_followed_by(columns_part, col, ',')
+                || sensitive_name_followed_by(columns_part, col, ')')
+        })
+}
+
+impl Rule for HardcodedCredential {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "SEC008",
+            name:     "Hardcoded credential detected",
+            severity: Severity::Error,
+            category: RuleCategory::Security
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        let upper = query.raw.to_uppercase();
+        let ddl_credential = upper.contains("IDENTIFIED BY '")
+            || upper.contains("WITH PASSWORD '")
+            || upper.contains("SET PASSWORD");
+        if !ddl_credential
+            && !has_sensitive_assignment(&upper)
+            && !has_sensitive_insert(query, &upper)
+        {
+            return vec![];
+        }
+        let info = self.info();
+        vec![Violation {
+            rule_id: info.id,
+            rule_name: info.name,
+            message: "Possible hardcoded credential in SQL statement".to_string(),
+            severity: info.severity,
+            category: info.category,
+            suggestion: Some(
+                "Use environment variables, a secret manager, or parameterized values instead of plaintext secrets"
+                    .to_string()
+            ),
+            query_index
+        }]
+    }
+}
+
 /// Detects tautology patterns associated with SQL injection
 ///
 /// A comparison of two identical literals joined by OR (`OR 1 = 1`,
