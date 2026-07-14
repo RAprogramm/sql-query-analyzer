@@ -165,6 +165,37 @@ fn test_explicit_columns_ok() {
 }
 
 #[test]
+fn test_injection_tautology_quoted() {
+    let violations = analyze_query("SELECT id FROM users WHERE name = '' OR '1' = '1' LIMIT 10");
+    assert!(violations.contains(&"SEC006".to_string()));
+}
+
+#[test]
+fn test_injection_tautology_numeric() {
+    let violations = analyze_query("SELECT id FROM users WHERE id = 5 OR 1 = 1 LIMIT 10");
+    assert!(violations.contains(&"SEC006".to_string()));
+}
+
+#[test]
+fn test_injection_tautology_empty_strings() {
+    let violations = analyze_query("SELECT id FROM users WHERE name = 'a' OR '' = '' LIMIT 10");
+    assert!(violations.contains(&"SEC006".to_string()));
+}
+
+#[test]
+fn test_or_on_columns_not_tautology() {
+    let violations = analyze_query("SELECT id FROM users WHERE id = 1 OR id = 2 LIMIT 10");
+    assert!(!violations.contains(&"SEC006".to_string()));
+}
+
+#[test]
+fn test_or_different_literals_not_tautology() {
+    let violations =
+        analyze_query("SELECT id FROM users WHERE name = 'a' OR status = 'b' LIMIT 10");
+    assert!(!violations.contains(&"SEC006".to_string()));
+}
+
+#[test]
 fn test_update_without_where() {
     let violations = analyze_query("UPDATE users SET status = 'inactive'");
     assert!(violations.contains(&"SEC001".to_string()));
