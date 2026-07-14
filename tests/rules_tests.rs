@@ -151,6 +151,46 @@ fn test_select_without_count_not_perf012() {
     assert!(!violations.contains(&"PERF012".to_string()));
 }
 
+fn in_list_query(n: usize) -> String {
+    let values: Vec<String> = (1..=n).map(|i| i.to_string()).collect();
+    format!(
+        "SELECT id FROM users WHERE id IN ({}) LIMIT 10",
+        values.join(", ")
+    )
+}
+
+#[test]
+fn test_large_in_clause_flagged() {
+    let violations = analyze_query(&in_list_query(60));
+    assert!(violations.contains(&"PERF019".to_string()));
+}
+
+#[test]
+fn test_small_in_clause_ok() {
+    let violations = analyze_query(&in_list_query(10));
+    assert!(!violations.contains(&"PERF019".to_string()));
+}
+
+#[test]
+fn test_huge_in_clause_is_error() {
+    let queries = parse_queries(&in_list_query(1500), SqlDialect::Generic).unwrap();
+    let report = RuleRunner::new().analyze(&queries);
+    let violation = report
+        .violations
+        .iter()
+        .find(|v| v.rule_id == "PERF019")
+        .unwrap();
+    assert_eq!(violation.severity, Severity::Error);
+}
+
+#[test]
+fn test_in_subquery_not_counted() {
+    let violations = analyze_query(
+        "SELECT id FROM users WHERE id IN (SELECT user_id FROM orders WHERE total > 0) LIMIT 10"
+    );
+    assert!(!violations.contains(&"PERF019".to_string()));
+}
+
 #[test]
 fn test_order_by_rand_mysql() {
     let violations = analyze_query("SELECT id FROM users ORDER BY RAND() LIMIT 5");

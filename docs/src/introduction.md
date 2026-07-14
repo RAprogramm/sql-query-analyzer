@@ -16,7 +16,7 @@ reach production.
 
 ## Highlights
 
-- **27 built-in rules** across performance, style, security, and schema-aware
+- **28 built-in rules** across performance, style, security, and schema-aware
   categories
 - **Schema-aware analysis** — detects missing indexes and unknown columns by
   parsing your `CREATE TABLE` statements

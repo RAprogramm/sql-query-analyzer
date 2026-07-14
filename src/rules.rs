@@ -23,7 +23,7 @@
 //!
 //! # Rule Categories
 //!
-//! - **Performance** (`PERF001`-`PERF013`) - Query optimization issues
+//! - **Performance** (`PERF001`-`PERF019`) - Query optimization issues
 //! - **Style** (`STYLE001`-`STYLE004`) - Best practice violations
 //! - **Security** (`SEC001`-`SEC008`) - Dangerous operations
 //! - **Schema** (`SCHEMA001`-`SCHEMA003`) - Schema validation (requires schema)
@@ -183,7 +183,7 @@ impl RuleRunner {
     ///
     /// # Notes
     ///
-    /// - Performance rules (PERF001-PERF013) detect query optimization issues
+    /// - Performance rules (PERF001-PERF019) detect query optimization issues
     /// - Style rules (STYLE001-STYLE004) enforce best practices
     /// - Security rules (SEC001-SEC008) detect dangerous operations
     pub fn with_config(config: RulesConfig) -> Self {
@@ -201,6 +201,7 @@ impl RuleRunner {
             Box::new(performance::SelectWithoutWhere),
             Box::new(performance::OrderByRandom),
             Box::new(performance::CountWithoutWhere),
+            Box::new(performance::LargeInClause),
             Box::new(style::SelectStar),
             Box::new(style::MissingTableAlias),
             Box::new(style::OrdinalInOrderOrGroupBy),
