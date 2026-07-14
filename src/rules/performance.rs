@@ -661,6 +661,83 @@ impl Rule for UnnecessaryDistinct {
     }
 }
 
+/// Deeply nested subqueries defeat optimizers and readers alike
+///
+/// Each nesting level multiplies planning complexity and usually hides a
+/// JOIN or CTE that would express the same logic flatter and faster.
+/// Severity scales with total SELECT depth: three levels is Info, four
+/// Warning, five or more Error.
+pub struct DeeplyNestedSubqueries;
+
+/// Returns the deepest count of parenthesized SELECTs enclosing each other.
+fn max_subquery_depth(upper: &str) -> usize {
+    let bytes = upper.as_bytes();
+    let mut select_stack: Vec<usize> = Vec::new();
+    let mut paren_depth = 0usize;
+    let mut max_depth = 0usize;
+    for (i, b) in bytes.iter().enumerate() {
+        match b {
+            b'(' => {
+                paren_depth += 1;
+                if upper[i + 1..].trim_start().starts_with("SELECT") {
+                    select_stack.push(paren_depth);
+                    max_depth = max_depth.max(select_stack.len());
+                }
+            }
+            b')' => {
+                if select_stack.last() == Some(&paren_depth) {
+                    select_stack.pop();
+                }
+                paren_depth = paren_depth.saturating_sub(1);
+            }
+            _ => {}
+        }
+    }
+    max_depth
+}
+
+impl Rule for DeeplyNestedSubqueries {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "PERF020",
+            name:     "Deeply nested subqueries",
+            severity: Severity::Warning,
+            category: RuleCategory::Performance
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        if query.query_type != QueryType::Select {
+            return vec![];
+        }
+        let upper = query.raw.to_uppercase();
+        let levels = max_subquery_depth(&upper) + 1;
+        if levels < 3 {
+            return vec![];
+        }
+        let severity = if levels >= 5 {
+            Severity::Error
+        } else if levels >= 4 {
+            Severity::Warning
+        } else {
+            Severity::Info
+        };
+        let info = self.info();
+        vec![Violation {
+            rule_id: info.id,
+            rule_name: info.name,
+            message: format!("Query nests SELECTs {} levels deep", levels),
+            severity,
+            category: info.category,
+            suggestion: Some(
+                "Flatten nested subqueries into JOINs or name the steps with CTEs (WITH ...)"
+                    .to_string()
+            ),
+            query_index
+        }]
+    }
+}
+
 /// DISTINCT with ORDER BY can be inefficient
 pub struct DistinctWithOrderBy;
 
