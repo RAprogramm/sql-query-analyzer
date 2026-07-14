@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add SCHEMA004 rule detecting JOIN on non-indexed column ([#107](https://github.com/RAprogramm/sql-query-analyzer/issues/107)) ([ca5b80b](https://github.com/RAprogramm/sql-query-analyzer/commit/ca5b80b53b4f52824a236b9d9b1ba02fd45da3d3))
+
+### Documentation
+
+- Update changelog [skip ci] ([c016a0c](https://github.com/RAprogramm/sql-query-analyzer/commit/c016a0c8c040be53449ed227ce6eddad36432e6d))
+
+## [0.12.0] - 2026-07-14
+
+### Added
+
 - Add PERF020 rule detecting deeply nested subqueries ([#106](https://github.com/RAprogramm/sql-query-analyzer/issues/106)) ([12e1dfd](https://github.com/RAprogramm/sql-query-analyzer/commit/12e1dfd7977689241a0329c14c8df5f831f95cf4))
 
 ### Documentation
@@ -293,7 +303,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Use rustls instead of openssl for cross-compilation ([2bdf030](https://github.com/RAprogramm/sql-query-analyzer/commit/2bdf03097c563bce1c7b70eb613f6d58bc52b0c2))
 
-[Unreleased]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.8.0...v0.9.0
