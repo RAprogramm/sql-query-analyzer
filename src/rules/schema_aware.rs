@@ -208,11 +208,11 @@ impl Rule for JoinOnNonIndexedColumn {
                         severity: info.severity,
                         category: info.category,
                         suggestion: Some(format!(
-                            "CREATE INDEX idx_{}_{} ON {}({})",
-                            table.name.to_lowercase(),
-                            col.to_lowercase(),
-                            table.name,
-                            col
+                            "CREATE INDEX idx_{table_lower}_{col_lower} ON {table}({col})",
+                            table_lower = table.name.to_lowercase(),
+                            col_lower = col.to_lowercase(),
+                            table = table.name,
+                            col = col
                         )),
                         query_index
                     });
