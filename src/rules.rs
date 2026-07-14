@@ -202,6 +202,7 @@ impl RuleRunner {
             Box::new(performance::OrderByRandom),
             Box::new(performance::CountWithoutWhere),
             Box::new(performance::LargeInClause),
+            Box::new(performance::HavingWithoutAggregate),
             Box::new(style::SelectStar),
             Box::new(style::MissingTableAlias),
             Box::new(style::OrdinalInOrderOrGroupBy),

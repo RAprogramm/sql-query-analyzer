@@ -151,6 +151,29 @@ fn test_select_without_count_not_perf012() {
     assert!(!violations.contains(&"PERF012".to_string()));
 }
 
+#[test]
+fn test_having_without_aggregate_flagged() {
+    let violations = analyze_query(
+        "SELECT status, COUNT(*) FROM orders WHERE id > 0 GROUP BY status HAVING status = 'active' LIMIT 10"
+    );
+    assert!(violations.contains(&"PERF018".to_string()));
+}
+
+#[test]
+fn test_having_with_aggregate_ok() {
+    let violations = analyze_query(
+        "SELECT status, COUNT(*) FROM orders WHERE id > 0 GROUP BY status HAVING COUNT(*) > 10 LIMIT 10"
+    );
+    assert!(!violations.contains(&"PERF018".to_string()));
+}
+
+#[test]
+fn test_no_having_not_flagged() {
+    let violations =
+        analyze_query("SELECT status, COUNT(*) FROM orders WHERE id > 0 GROUP BY status LIMIT 10");
+    assert!(!violations.contains(&"PERF018".to_string()));
+}
+
 fn in_list_query(n: usize) -> String {
     let values: Vec<String> = (1..=n).map(|i| i.to_string()).collect();
     format!(
