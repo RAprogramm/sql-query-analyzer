@@ -182,6 +182,28 @@ fn test_distinct_single_table_ok() {
 }
 
 #[test]
+fn test_repeated_table_scan_flagged() {
+    let violations = analyze_query(
+        "SELECT id FROM orders WHERE amount > (SELECT AVG(amount) FROM orders) LIMIT 10"
+    );
+    assert!(violations.contains(&"PERF016".to_string()));
+}
+
+#[test]
+fn test_self_join_flagged() {
+    let violations = analyze_query(
+        "SELECT e.name FROM employees e JOIN employees m ON e.manager_id = m.id WHERE e.id > 0 LIMIT 10"
+    );
+    assert!(violations.contains(&"PERF016".to_string()));
+}
+
+#[test]
+fn test_single_scan_not_flagged() {
+    let violations = analyze_query("SELECT id FROM orders WHERE amount > 100 LIMIT 10");
+    assert!(!violations.contains(&"PERF016".to_string()));
+}
+
+#[test]
 fn test_having_without_aggregate_flagged() {
     let violations = analyze_query(
         "SELECT status, COUNT(*) FROM orders WHERE id > 0 GROUP BY status HAVING status = 'active' LIMIT 10"

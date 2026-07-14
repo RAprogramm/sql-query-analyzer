@@ -738,6 +738,70 @@ impl Rule for DeeplyNestedSubqueries {
     }
 }
 
+/// Same table scanned more than once in a single statement
+///
+/// Repeated FROM/JOIN references to one table (self-joins, repeated
+/// subqueries over the same data) multiply I/O; a CTE, window function, or
+/// conditional aggregation usually reads the table once instead.
+pub struct RepeatedTableScan;
+
+/// Counts FROM/JOIN references to `table` at word boundaries.
+fn table_scan_count(upper: &str, table: &str) -> usize {
+    ["FROM ", "JOIN "]
+        .iter()
+        .map(|kw| {
+            let needle = format!("{kw}{table}");
+            upper
+                .match_indices(&needle)
+                .filter(|(pos, _)| {
+                    let end = pos + needle.len();
+                    upper[end..]
+                        .chars()
+                        .next()
+                        .is_none_or(|c| !c.is_ascii_alphanumeric() && c != '_')
+                })
+                .count()
+        })
+        .sum()
+}
+
+impl Rule for RepeatedTableScan {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "PERF016",
+            name:     "Multiple scans of same table",
+            severity: Severity::Info,
+            category: RuleCategory::Performance
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        if query.query_type != QueryType::Select {
+            return vec![];
+        }
+        let upper = query.raw.to_uppercase();
+        for table in &query.tables {
+            let scans = table_scan_count(&upper, &table.to_uppercase());
+            if scans >= 2 {
+                let info = self.info();
+                return vec![Violation {
+                    rule_id: info.id,
+                    rule_name: info.name,
+                    message: format!("Table '{}' is scanned {} times", table, scans),
+                    severity: info.severity,
+                    category: info.category,
+                    suggestion: Some(
+                        "Read the table once via a CTE, window function, or conditional aggregation"
+                            .to_string()
+                    ),
+                    query_index
+                }];
+            }
+        }
+        vec![]
+    }
+}
+
 /// DISTINCT with ORDER BY can be inefficient
 pub struct DistinctWithOrderBy;
 

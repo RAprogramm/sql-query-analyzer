@@ -205,6 +205,7 @@ impl RuleRunner {
             Box::new(performance::HavingWithoutAggregate),
             Box::new(performance::UnnecessaryDistinct),
             Box::new(performance::DeeplyNestedSubqueries),
+            Box::new(performance::RepeatedTableScan),
             Box::new(style::SelectStar),
             Box::new(style::MissingTableAlias),
             Box::new(style::OrdinalInOrderOrGroupBy),

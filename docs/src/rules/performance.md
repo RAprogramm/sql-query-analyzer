@@ -182,6 +182,21 @@ SELECT id FROM users WHERE phone = 5551234;
 SELECT id FROM users WHERE phone = '5551234';
 ```
 
+## PERF016 — Multiple scans of same table (Info)
+
+Repeated `FROM`/`JOIN` references to one table multiply I/O. A CTE, window
+function, or conditional aggregation usually reads the table once.
+
+```sql
+-- Flagged
+SELECT * FROM orders o1 WHERE amount > (SELECT AVG(amount) FROM orders);
+
+-- Better: one scan with a window function
+SELECT * FROM (
+    SELECT o.*, AVG(amount) OVER () AS avg_amount FROM orders o
+) t WHERE amount > avg_amount;
+```
+
 ## PERF018 — HAVING without aggregate (Warning)
 
 `HAVING` filters after grouping; a condition on plain columns forces the
