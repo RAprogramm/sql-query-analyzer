@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add PERF019 rule detecting large IN clauses ([#103](https://github.com/RAprogramm/sql-query-analyzer/issues/103)) ([4ad7e9b](https://github.com/RAprogramm/sql-query-analyzer/commit/4ad7e9b07e762b8c9d76e8d368d9a7fdf91a1947))
+
+### Documentation
+
+- Update changelog [skip ci] ([66bad57](https://github.com/RAprogramm/sql-query-analyzer/commit/66bad57b3fc6a98ea181197cab0c07174fad3d56))
+
+## [0.8.0] - 2026-07-14
+
+### Added
+
 - Add SEC007 rule detecting dynamic SQL execution ([#102](https://github.com/RAprogramm/sql-query-analyzer/issues/102)) ([f3957e8](https://github.com/RAprogramm/sql-query-analyzer/commit/f3957e8b287e3b502ff64d07d93fbbe5e85e57d5))
 
 ### Documentation
@@ -24,12 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### CI/CD
 
 - Cancel in-progress runs only for pull requests ([#101](https://github.com/RAprogramm/sql-query-analyzer/issues/101)) ([a318ba4](https://github.com/RAprogramm/sql-query-analyzer/commit/a318ba47939661b536c0550651a12eb3e33279ef))
-
-### Documentation
-
-- Update changelog [skip ci] ([67f0845](https://github.com/RAprogramm/sql-query-analyzer/commit/67f0845984a4297c889ffb78fbdd4a42bbb58e70))
-
-## [0.7.0] - 2026-07-14
 
 ### Documentation
 
@@ -259,7 +263,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Use rustls instead of openssl for cross-compilation ([2bdf030](https://github.com/RAprogramm/sql-query-analyzer/commit/2bdf03097c563bce1c7b70eb613f6d58bc52b0c2))
 
-[Unreleased]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.4.1...v0.5.2
