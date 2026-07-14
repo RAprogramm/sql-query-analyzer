@@ -17,3 +17,10 @@ rules:
   superfluous-actions:
     ignore:
       - _release.yml
+
+  # These two jobs push with git (the release tag and the regenerated
+  # CHANGELOG.md), so their checkouts must keep credentials.
+  artipacked:
+    ignore:
+      - _tag.yml
+      - _changelog.yml
