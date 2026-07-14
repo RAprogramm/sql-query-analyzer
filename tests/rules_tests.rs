@@ -220,6 +220,40 @@ fn test_or_different_literals_not_tautology() {
 }
 
 #[test]
+fn test_grant_statement_flagged() {
+    let violations = analyze_query("GRANT SELECT ON users TO analyst");
+    assert!(violations.contains(&"SEC005".to_string()));
+}
+
+#[test]
+fn test_revoke_statement_flagged() {
+    let violations = analyze_query("REVOKE DELETE ON orders FROM intern");
+    assert!(violations.contains(&"SEC005".to_string()));
+}
+
+#[test]
+fn test_broad_grant_is_error() {
+    let queries = parse_queries(
+        "GRANT ALL PRIVILEGES ON users TO new_user",
+        SqlDialect::Generic
+    )
+    .unwrap();
+    let report = RuleRunner::new().analyze(&queries);
+    let violation = report
+        .violations
+        .iter()
+        .find(|v| v.rule_id == "SEC005")
+        .unwrap();
+    assert_eq!(violation.severity, Severity::Error);
+}
+
+#[test]
+fn test_select_not_privilege_change() {
+    let violations = analyze_query("SELECT id FROM grants WHERE id = 1 LIMIT 5");
+    assert!(!violations.contains(&"SEC005".to_string()));
+}
+
+#[test]
 fn test_hardcoded_credential_insert() {
     let violations =
         analyze_query("INSERT INTO users (email, password) VALUES ('a@b.c', 'admin123')");
