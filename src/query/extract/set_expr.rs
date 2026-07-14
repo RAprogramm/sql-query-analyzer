@@ -28,8 +28,11 @@ pub fn extract_from_set_expr(set_expr: &sqlparser::ast::SetExpr, ctx: &mut Extra
                 for join in &table.joins {
                     extract_from_table_factor(&join.relation, ctx.tables);
                     match &join.join_operator {
-                        sqlparser::ast::JoinOperator::Inner(constraint)
+                        sqlparser::ast::JoinOperator::Join(constraint)
+                        | sqlparser::ast::JoinOperator::Inner(constraint)
+                        | sqlparser::ast::JoinOperator::Left(constraint)
                         | sqlparser::ast::JoinOperator::LeftOuter(constraint)
+                        | sqlparser::ast::JoinOperator::Right(constraint)
                         | sqlparser::ast::JoinOperator::RightOuter(constraint)
                         | sqlparser::ast::JoinOperator::FullOuter(constraint) => {
                             if let sqlparser::ast::JoinConstraint::On(expr) = constraint {
