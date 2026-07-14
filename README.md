@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/RAprogramm/sql-query-analyzer/main/.github/assets/banner.png" alt="SQL Query Analyzer — static analysis and LLM-powered optimization for SQL queries" width="100%">
 </p>
 
-# SQL Query Analyzer
+—-
 
 [![Crates.io](https://img.shields.io/crates/v/sql-query-analyzer.svg)](https://crates.io/crates/sql-query-analyzer)
 [![Docs.rs](https://docs.rs/sql_query_analyzer/badge.svg)](https://docs.rs/sql_query_analyzer)
