@@ -458,6 +458,90 @@ impl Rule for CountWithoutWhere {
     }
 }
 
+/// Large IN value lists degrade planning and execution
+///
+/// Very long IN lists blow up parse and plan time, defeat plan caching, and
+/// on some engines hit hard parameter limits. Severity scales with size:
+/// more than 50 items is Info, more than 200 Warning, more than 1000 Error.
+pub struct LargeInClause;
+
+/// Counts top-level comma-separated items in an IN list body, returning
+/// None when the list is a subquery rather than a value list.
+fn in_list_item_count(body: &str) -> Option<usize> {
+    if body.trim_start().starts_with("SELECT") {
+        return None;
+    }
+    let mut depth = 0usize;
+    let mut items = 1usize;
+    for b in body.bytes() {
+        match b {
+            b'(' => depth += 1,
+            b')' => {
+                if depth == 0 {
+                    break;
+                }
+                depth -= 1;
+            }
+            b',' if depth == 0 => items += 1,
+            _ => {}
+        }
+    }
+    Some(items)
+}
+
+/// Returns the largest IN value-list size found in the statement.
+fn max_in_list_size(upper: &str) -> usize {
+    let mut max_items = 0;
+    let mut search_from = 0;
+    while let Some(pos) = upper[search_from..].find(" IN (") {
+        let body_start = search_from + pos + " IN (".len();
+        if let Some(items) = in_list_item_count(&upper[body_start..]) {
+            max_items = max_items.max(items);
+        }
+        search_from = body_start;
+    }
+    max_items
+}
+
+impl Rule for LargeInClause {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "PERF019",
+            name:     "Large IN clause",
+            severity: Severity::Warning,
+            category: RuleCategory::Performance
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        let upper = query.raw.to_uppercase();
+        let items = max_in_list_size(&upper);
+        if items <= 50 {
+            return vec![];
+        }
+        let severity = if items > 1000 {
+            Severity::Error
+        } else if items > 200 {
+            Severity::Warning
+        } else {
+            Severity::Info
+        };
+        let info = self.info();
+        vec![Violation {
+            rule_id: info.id,
+            rule_name: info.name,
+            message: format!("IN clause contains {} values", items),
+            severity,
+            category: info.category,
+            suggestion: Some(
+                "Load the values into a temporary table and JOIN against it, or split the query into batches"
+                    .to_string()
+            ),
+            query_index
+        }]
+    }
+}
+
 /// DISTINCT with ORDER BY can be inefficient
 pub struct DistinctWithOrderBy;
 

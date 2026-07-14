@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add SEC007 rule detecting dynamic SQL execution ([#102](https://github.com/RAprogramm/sql-query-analyzer/issues/102)) ([f3957e8](https://github.com/RAprogramm/sql-query-analyzer/commit/f3957e8b287e3b502ff64d07d93fbbe5e85e57d5))
+
+### Documentation
+
+- Update changelog [skip ci] ([67f0845](https://github.com/RAprogramm/sql-query-analyzer/commit/67f0845984a4297c889ffb78fbdd4a42bbb58e70))
+
+## [0.7.0] - 2026-07-14
+
+### Added
+
+- Add SEC005 rule detecting GRANT/REVOKE privilege changes ([#99](https://github.com/RAprogramm/sql-query-analyzer/issues/99)) ([efbddd8](https://github.com/RAprogramm/sql-query-analyzer/commit/efbddd87e90fd0e59a66c7b6980256b5a0d1f746))
+
+### CI/CD
+
+- Cancel in-progress runs only for pull requests ([#101](https://github.com/RAprogramm/sql-query-analyzer/issues/101)) ([a318ba4](https://github.com/RAprogramm/sql-query-analyzer/commit/a318ba47939661b536c0550651a12eb3e33279ef))
+
 ### Documentation
 
 - Update changelog [skip ci] ([67f0845](https://github.com/RAprogramm/sql-query-analyzer/commit/67f0845984a4297c889ffb78fbdd4a42bbb58e70))
@@ -19,16 +37,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] - 2026-07-14
 
+### Added
+
+- Add PERF012 rule detecting COUNT(*) without WHERE ([#98](https://github.com/RAprogramm/sql-query-analyzer/issues/98)) ([07d0bfd](https://github.com/RAprogramm/sql-query-analyzer/commit/07d0bfd71377fde567c5e4b1f1906dc56f1b3041))
+- Add SEC008 rule detecting hardcoded credentials ([#95](https://github.com/RAprogramm/sql-query-analyzer/issues/95)) ([f9d96f4](https://github.com/RAprogramm/sql-query-analyzer/commit/f9d96f4c09421cb66e68b24ad11ced60bc83c830))
+- Add SEC006 rule detecting SQL injection tautologies ([#94](https://github.com/RAprogramm/sql-query-analyzer/issues/94)) ([4682b3e](https://github.com/RAprogramm/sql-query-analyzer/commit/4682b3e9b5ec4a8a11b105dddb647a614b5adced))
+- Add STYLE004 rule detecting ordinals in ORDER BY and GROUP BY ([#93](https://github.com/RAprogramm/sql-query-analyzer/issues/93)) ([1c24318](https://github.com/RAprogramm/sql-query-analyzer/commit/1c24318bd6353a061d4936bf1afb999e5797ebe0))
+- Add PERF013 rule detecting ORDER BY RAND() ([#92](https://github.com/RAprogramm/sql-query-analyzer/issues/92)) ([ea547d8](https://github.com/RAprogramm/sql-query-analyzer/commit/ea547d81a767abd2d5ee26c85f5de7d46a391d2f))
+
 ### CI/CD
 
+- Restore tag and changelog push credentials, unskip changelog job ([#97](https://github.com/RAprogramm/sql-query-analyzer/issues/97)) ([18ca01a](https://github.com/RAprogramm/sql-query-analyzer/commit/18ca01a26412dd599a3fe9f4d50c53de583d2080))
+- Add scorecard, zizmor, codeql and release attestations ([#91](https://github.com/RAprogramm/sql-query-analyzer/issues/91)) ([940f52e](https://github.com/RAprogramm/sql-query-analyzer/commit/940f52e6949fea2306d68266fb041a3c337feb01))
+- Unpin cargo-quality action back to v0 ([#87](https://github.com/RAprogramm/sql-query-analyzer/issues/87)) ([ab35eb5](https://github.com/RAprogramm/sql-query-analyzer/commit/ab35eb511a487fe3c891a13d7d4cd69793585f10))
+- Automate dependency updates and fix audit check publishing ([#85](https://github.com/RAprogramm/sql-query-analyzer/issues/85)) ([13b06a6](https://github.com/RAprogramm/sql-query-analyzer/commit/13b06a6804d95981f46341f2c5140b64fc6c6e9c))
 - Bump the github-actions group across 1 directory with 2 updates ([953c181](https://github.com/RAprogramm/sql-query-analyzer/commit/953c1810f86a85a45917d60e05b1129b6a99b296))
 - Bump the github-actions group across 1 directory with 5 updates ([2e6e200](https://github.com/RAprogramm/sql-query-analyzer/commit/2e6e200b399bc1de74f09cf84b7b6fee053bc388))
 
-### Miscellaneous
-
-- New banner ([d5a2d7c](https://github.com/RAprogramm/sql-query-analyzer/commit/d5a2d7cfd8d46456bd6de326a5325f869ac4bcc6))
-
-### Deps
+### Dependencies
 
 - Bump the rust-dependencies group across 1 directory with 2 updates ([1593445](https://github.com/RAprogramm/sql-query-analyzer/commit/15934456fb68a517d752d26e606e8c2a12a5b276))
 - Bump bytes from 1.11.0 to 1.11.1 ([49fd5be](https://github.com/RAprogramm/sql-query-analyzer/commit/49fd5be8b393e293f51b1aecadbd4394ebd45ea8))
@@ -37,10 +63,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump the rust-dependencies group with 2 updates ([9402f64](https://github.com/RAprogramm/sql-query-analyzer/commit/9402f64e56784b370c1f6232c17ce2bf364fb60e))
 - Bump the rust-dependencies group with 3 updates ([78b4db0](https://github.com/RAprogramm/sql-query-analyzer/commit/78b4db0eae0b54c2c0e9150cfbaf8c2d98a26783))
 
+### Documentation
+
+- Publish mdBook documentation site on GitHub Pages ([#89](https://github.com/RAprogramm/sql-query-analyzer/issues/89)) ([699c9a4](https://github.com/RAprogramm/sql-query-analyzer/commit/699c9a4729648e933be23a1a9d052dc1d0126ff8))
+- Add project banner to README ([#83](https://github.com/RAprogramm/sql-query-analyzer/issues/83)) ([f653dca](https://github.com/RAprogramm/sql-query-analyzer/commit/f653dca7eccc88536929ecb2a1456b7bd4e61910))
+
+### Fixed
+
+- Resolve cargo-quality findings ([#81](https://github.com/RAprogramm/sql-query-analyzer/issues/81)) ([c88306c](https://github.com/RAprogramm/sql-query-analyzer/commit/c88306c108ba064d1c6e776024f6c22206b2fdc5))
+
+### Miscellaneous
+
+- New banner ([d5a2d7c](https://github.com/RAprogramm/sql-query-analyzer/commit/d5a2d7cfd8d46456bd6de326a5325f869ac4bcc6))
+- Update dependencies to latest, bump MSRV to 1.97 ([#79](https://github.com/RAprogramm/sql-query-analyzer/issues/79)) ([4e9c4cc](https://github.com/RAprogramm/sql-query-analyzer/commit/4e9c4ccb7febc799af15a711130d329cab1fbe88))
+
 ## [0.5.2] - 2025-12-19
+
+### Added
+
+- Add SQL preprocessor for ClickHouse dialect ([86845b6](https://github.com/RAprogramm/sql-query-analyzer/commit/86845b6c8c3d616dac0863fafce2f457de9a7655))
 
 ### Changed
 
+- Split app.rs into submodules ([dfaf345](https://github.com/RAprogramm/sql-query-analyzer/commit/dfaf34530d3276110282cc924b8984d7aaa643cd))
 - Move CLI logic to app.rs for testability ([323de1e](https://github.com/RAprogramm/sql-query-analyzer/commit/323de1ef501c2c01e506645cd0448c317ec107f6))
 
 ### Documentation
@@ -58,7 +103,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Extract MSRV from Cargo.toml dynamically ([7b36bfe](https://github.com/RAprogramm/sql-query-analyzer/commit/7b36bfe9d0fbab2e8d611e61d26fcc54e855b464))
 - Bump the github-actions group across 1 directory with 4 updates ([a592a67](https://github.com/RAprogramm/sql-query-analyzer/commit/a592a67a4a53f988cba98d375fdfe7b25360d0ee))
 
+### Fixed
+
+- Hide API key from help output ([4f38d06](https://github.com/RAprogramm/sql-query-analyzer/commit/4f38d06f471666752770b167c8c52065ab591a5a))
+
 ## [0.4.0] - 2025-11-30
+
+### Added
+
+- Implement ClickHouse CREATE TABLE parsing ([ba84477](https://github.com/RAprogramm/sql-query-analyzer/commit/ba844779a04e2d33747df3595e80f50a3be616bc))
+- Add dialect parameter to Schema::parse ([d45657c](https://github.com/RAprogramm/sql-query-analyzer/commit/d45657c301e8fb7d4bec59b06ea6907ec3487ef4))
+- Add codec field to ColumnInfo ([6acfd17](https://github.com/RAprogramm/sql-query-analyzer/commit/6acfd17e118f062589b0160d41124387d213ce67))
 
 ### CI/CD
 
@@ -67,13 +122,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Fix cargo qual empty_lines issues ([7871034](https://github.com/RAprogramm/sql-query-analyzer/commit/78710345301ccc074ef13826438046acca58d2dc))
 - Professional PR comment UI with GitHub alerts and collapsible sections ([7772e5f](https://github.com/RAprogramm/sql-query-analyzer/commit/7772e5f2190c9b7ffb3fcfc1569f5011fa8e354a))
 
 ### Fixed
 
+- Check entire project in cargo qual CI ([a12c930](https://github.com/RAprogramm/sql-query-analyzer/commit/a12c93013efeda165872d8a5fef0627c4781ad48))
 - Assign explicit discriminants to QueryType enum for semver stability ([dc99f89](https://github.com/RAprogramm/sql-query-analyzer/commit/dc99f8949fc67579b5cd77fad834a7fc595ba6a1))
 
+### Testing
+
+- Add ClickHouse query parsing tests ([a6ce97c](https://github.com/RAprogramm/sql-query-analyzer/commit/a6ce97c38561e26a752dc186890f7e27f59d6e74))
+- Add ClickHouse CREATE TABLE parsing tests ([fc36d25](https://github.com/RAprogramm/sql-query-analyzer/commit/fc36d25f6c81e3b2ea4cc0634bfc114af78b50b0))
+
 ## [0.3.0] - 2025-11-28
+
+### Added
+
+- Add SEC003 TRUNCATE statement detection ([a96d5c1](https://github.com/RAprogramm/sql-query-analyzer/commit/a96d5c1ce89e2f9e3433117f6b214a357046051f))
 
 ### CI/CD
 
@@ -109,6 +175,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix tag workflow outputs, bump to 0.1.4 ([fbe9832](https://github.com/RAprogramm/sql-query-analyzer/commit/fbe98326f06619ac730fb58792984cf495b0ea49))
 - Trigger release ([f9dada9](https://github.com/RAprogramm/sql-query-analyzer/commit/f9dada9b4caa741769dcc309bf8f5a81ccd789e4))
 - Add description to reusable workflow outputs ([7ae1366](https://github.com/RAprogramm/sql-query-analyzer/commit/7ae13661099ef3c94911b0ddf59a712e11771166))
+- Auto-create tag and release on version bump ([6e83e62](https://github.com/RAprogramm/sql-query-analyzer/commit/6e83e62cf07b529798ff197253fc8a7e7e8c5953))
+- Add permissions for quality check PR comments ([cd6c085](https://github.com/RAprogramm/sql-query-analyzer/commit/cd6c08570927b71305d8a814d73a901dfb43f5ed))
 - Enforce PR size check before lints and qual after clippy ([ef3f26a](https://github.com/RAprogramm/sql-query-analyzer/commit/ef3f26a7ea05d1ea0a253a16c9458ef417102627))
 - Fix deny licenses and remove unused dependencies ([d639d9e](https://github.com/RAprogramm/sql-query-analyzer/commit/d639d9eced635a3c2ce17fe459e8051275544274))
 - Add comprehensive quality gates and fix doctests ([f19dc9d](https://github.com/RAprogramm/sql-query-analyzer/commit/f19dc9d2bdbbb7e76adffd5816d4d999cd5f2150))
@@ -119,6 +187,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Split CI into reusable workflows ([75bc5d2](https://github.com/RAprogramm/sql-query-analyzer/commit/75bc5d259b5a541cfc56d56b6e44dd1ad8b44d65))
 - Fix all cargo-qual issues and add quality CI job ([50c472a](https://github.com/RAprogramm/sql-query-analyzer/commit/50c472a10fad6b9475bf5e3ae59bda8041fc227a))
 
 ### Documentation
@@ -130,6 +199,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add contributing guidelines with PR size limits ([16f6e7f](https://github.com/RAprogramm/sql-query-analyzer/commit/16f6e7f3c364ccfbe75d2da18c1f304bff702030))
 - Add REUSE compliance badge ([b7f838a](https://github.com/RAprogramm/sql-query-analyzer/commit/b7f838a3d2945352495cc17429eddfa92edb9e3f))
 - Update changelog [skip ci] ([8160321](https://github.com/RAprogramm/sql-query-analyzer/commit/8160321282ba46a04e7f8b810e85621a92d6f3da))
+
+### Fixed
+
+- Use github format for pr-size limit checking ([fde1a41](https://github.com/RAprogramm/sql-query-analyzer/commit/fde1a410e77657b392f804d0ac855e3635f016e4))
+- Add pull-requests write permission for pr-size ([c697525](https://github.com/RAprogramm/sql-query-analyzer/commit/c6975258f73a42fb60edb396f617380d893c448f))
+- Use correct input names for rust-prod-diff-checker ([79188e2](https://github.com/RAprogramm/sql-query-analyzer/commit/79188e267fcc80ee4757203296671690d79c82fc))
+- Reorder CI stages and fix permissions ([dd75f2a](https://github.com/RAprogramm/sql-query-analyzer/commit/dd75f2aa66cfbdd71e83c6434b2de838e0c6bb08))
+- Move qual permissions to caller workflow ([5e8c70b](https://github.com/RAprogramm/sql-query-analyzer/commit/5e8c70b0bc2722f0f209a09d29a0fc1132e4e531))
+- Rename binary to sql-query-analyzer ([1fcfb83](https://github.com/RAprogramm/sql-query-analyzer/commit/1fcfb839e042f34524ab47dfaea159170728ac01))
 
 ### Miscellaneous
 

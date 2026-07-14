@@ -147,3 +147,17 @@ LIMIT 5;
 -- Better: pre-generated indexed random column
 SELECT * FROM products ORDER BY random_sort LIMIT 5;
 ```
+
+## PERF019 — Large IN clause (Warning)
+
+Very long `IN` lists blow up parse and plan time, defeat plan caching, and on
+some engines hit hard parameter limits. Severity scales with size: more than
+50 items is Info, more than 200 Warning, more than 1000 Error. Subqueries
+(`IN (SELECT …)`) are not counted.
+
+```sql
+-- Flagged
+SELECT * FROM users WHERE id IN (1, 2, 3, /* …60 more… */ 64);
+
+-- Better: JOIN against a temporary table, or batch the lookups
+```
