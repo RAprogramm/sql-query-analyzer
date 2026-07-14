@@ -197,6 +197,23 @@ SELECT * FROM (
 ) t WHERE amount > avg_amount;
 ```
 
+## PERF017 — Correlated subquery (Warning)
+
+A subquery that references a table or alias of the outer query cannot be
+evaluated once; the engine re-runs it for every candidate row.
+
+```sql
+-- Flagged: the subquery references outer alias u
+SELECT * FROM users u
+WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);
+
+-- Not flagged: independent subquery, evaluated once
+SELECT * FROM users WHERE id IN (SELECT user_id FROM orders);
+
+-- Better: single pass
+SELECT DISTINCT u.* FROM users u JOIN orders o ON o.user_id = u.id;
+```
+
 ## PERF018 — HAVING without aggregate (Warning)
 
 `HAVING` filters after grouping; a condition on plain columns forces the
