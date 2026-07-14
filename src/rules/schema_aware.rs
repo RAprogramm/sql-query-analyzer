@@ -223,6 +223,102 @@ impl Rule for JoinOnNonIndexedColumn {
     }
 }
 
+/// String column compared with a bare numeric literal
+///
+/// Comparing a text column to a number forces the engine to cast one side
+/// on every row; on most engines the column side is cast, which disables
+/// its index and can silently change matching semantics.
+pub struct ImplicitTypeConversion {
+    schema: Schema
+}
+
+impl ImplicitTypeConversion {
+    pub fn new(schema: Schema) -> Self {
+        Self {
+            schema
+        }
+    }
+
+    fn text_columns(&self) -> Vec<String> {
+        self.schema
+            .tables
+            .values()
+            .flat_map(|t| t.columns.iter())
+            .filter(|c| {
+                let ty = c.data_type.to_uppercase();
+                ty.contains("CHAR") || ty.contains("TEXT")
+            })
+            .map(|c| c.name.to_uppercase())
+            .collect()
+    }
+}
+
+/// Returns true when `upper` compares `col` to a bare numeric literal
+/// (`col = 123`), i.e. the token after `=` starts with a digit and no quote.
+fn compares_column_to_number(upper: &str, col: &str) -> bool {
+    upper.match_indices(col).any(|(pos, _)| {
+        if pos > 0 {
+            let prev = upper.as_bytes()[pos - 1];
+            if prev.is_ascii_alphanumeric() || prev == b'_' || prev == b'.' {
+                return false;
+            }
+        }
+        let after = &upper[pos + col.len()..];
+        let Some(rest) = after.trim_start().strip_prefix('=') else {
+            return false;
+        };
+        rest.trim_start()
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_digit())
+    })
+}
+
+impl Rule for ImplicitTypeConversion {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "PERF015",
+            name:     "Implicit type conversion",
+            severity: Severity::Warning,
+            category: RuleCategory::Performance
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        if query.where_cols.is_empty() {
+            return vec![];
+        }
+        let upper = query.raw.to_uppercase();
+        let text_cols = self.text_columns();
+        let mut violations = Vec::new();
+        for col in &query.where_cols {
+            let col_upper = col.to_uppercase();
+            if !text_cols.iter().any(|c| *c == col_upper) {
+                continue;
+            }
+            if compares_column_to_number(&upper, &col_upper) {
+                let info = self.info();
+                violations.push(Violation {
+                    rule_id: info.id,
+                    rule_name: info.name,
+                    message: format!(
+                        "Text column '{}' is compared with a numeric literal",
+                        col
+                    ),
+                    severity: info.severity,
+                    category: info.category,
+                    suggestion: Some(
+                        "Quote the literal to match the column type; implicit casts disable indexes"
+                            .to_string()
+                    ),
+                    query_index
+                });
+            }
+        }
+        violations
+    }
+}
+
 /// Suggest indexes based on query patterns
 pub struct SuggestIndex {
     schema: Schema

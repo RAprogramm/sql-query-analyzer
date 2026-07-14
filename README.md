@@ -38,7 +38,7 @@ A comprehensive SQL analysis tool that combines fast, deterministic static analy
 
 ## Highlights
 
-- **32 Built-in Rules** — Performance, style, and security checks run instantly without API calls
+- **33 Built-in Rules** — Performance, style, and security checks run instantly without API calls
 - **Schema-Aware Analysis** — Validates queries against your database schema, suggests missing indexes
 - **Multi-Dialect Support** — Generic, MySQL, PostgreSQL, SQLite, and ClickHouse with preprocessor for dialect-specific syntax
 - **Multiple Output Formats** — Text, JSON, YAML, and SARIF for CI/CD integration
@@ -101,6 +101,7 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql --provider openai
 | `PERF012` | COUNT(*) without WHERE | Warning | Counting every row scans the entire table |
 | `PERF013` | ORDER BY RAND() | Warning | Full scan and sort regardless of `LIMIT` |
 | `PERF014` | Unnecessary DISTINCT | Info | `DISTINCT` with `JOIN` often hides join fan-out; `DISTINCT *` escalates to Warning |
+| `PERF015` | Implicit type conversion | Warning | Text column compared with numeric literal disables its index (needs schema) |
 | `PERF018` | HAVING without aggregate | Warning | Non-aggregate conditions belong in `WHERE` |
 | `PERF019` | Large IN clause | Warning | 50+ values degrade planning; severity scales with size |
 | `PERF020` | Deeply nested subqueries | Warning | 3+ SELECT levels; severity scales with depth |
@@ -331,7 +332,7 @@ For fast CI checks without external API calls:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-This runs all 32 built-in rules instantly without requiring any API keys.
+This runs all 33 built-in rules instantly without requiring any API keys.
 
 #### Advanced Usage
 
@@ -451,7 +452,7 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql
                       ▼
          ┌────────────────────────┐
          │    Static Analysis     │
-         │  (32 rules, parallel)  │
+         │  (33 rules, parallel)  │
          └────────────┬───────────┘
                       │
                       ▼

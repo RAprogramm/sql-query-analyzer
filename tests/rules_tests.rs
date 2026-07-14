@@ -498,6 +498,33 @@ fn test_join_on_indexed_column_ok() {
 }
 
 #[test]
+fn test_implicit_conversion_flagged() {
+    let schema = "CREATE TABLE users (id INT PRIMARY KEY, phone VARCHAR(20))";
+    let violations = analyze_with_schema(
+        "SELECT id FROM users WHERE phone = 5551234 LIMIT 10",
+        schema
+    );
+    assert!(violations.contains(&"PERF015".to_string()));
+}
+
+#[test]
+fn test_quoted_literal_no_conversion() {
+    let schema = "CREATE TABLE users (id INT PRIMARY KEY, phone VARCHAR(20))";
+    let violations = analyze_with_schema(
+        "SELECT id FROM users WHERE phone = '5551234' LIMIT 10",
+        schema
+    );
+    assert!(!violations.contains(&"PERF015".to_string()));
+}
+
+#[test]
+fn test_numeric_column_comparison_ok() {
+    let schema = "CREATE TABLE users (id INT PRIMARY KEY, phone VARCHAR(20))";
+    let violations = analyze_with_schema("SELECT id FROM users WHERE id = 42 LIMIT 10", schema);
+    assert!(!violations.contains(&"PERF015".to_string()));
+}
+
+#[test]
 fn test_schema_missing_index() {
     let schema = "CREATE TABLE users (id INT PRIMARY KEY, email VARCHAR(255))";
     let violations = analyze_with_schema(
