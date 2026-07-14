@@ -36,6 +36,24 @@ or easily audited.
 flags any DROP statement found in analyzed query files — migration tooling
 should own such statements, not application query sets.
 
+## SEC005 — GRANT/REVOKE privilege change
+
+Privilege changes belong in reviewed migrations, not application query sets —
+an unnoticed `GRANT` widens the attack surface permanently.
+
+```sql
+-- Flagged (Warning)
+GRANT SELECT ON users TO analyst;
+REVOKE DELETE ON orders FROM intern;
+
+-- Flagged (Error): broad or public access
+GRANT ALL PRIVILEGES ON DATABASE prod TO new_user;
+GRANT SELECT ON users TO PUBLIC;
+```
+
+Broad grants (`ALL PRIVILEGES`, `ON *.*`, `TO PUBLIC`, `SUPERUSER`) escalate
+the violation to Error severity.
+
 ## SEC006 — SQL injection pattern
 
 An always-true `OR` tautology almost never appears in legitimate queries; it

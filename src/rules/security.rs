@@ -123,6 +123,65 @@ impl Rule for DropDetected {
     }
 }
 
+/// Detects GRANT/REVOKE privilege changes in query files
+///
+/// Privilege changes belong in reviewed migrations, not application query
+/// sets: an unnoticed GRANT widens the attack surface permanently. Broad
+/// grants (ALL PRIVILEGES, ON *.*, TO PUBLIC, SUPERUSER) escalate the
+/// violation to Error.
+pub struct PrivilegeChange;
+
+/// Grant shapes that hand out broad or public access.
+const DANGEROUS_GRANT_MARKERS: [&str; 4] = ["ALL PRIVILEGES", "ON *.*", "TO PUBLIC", "SUPERUSER"];
+
+impl Rule for PrivilegeChange {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "SEC005",
+            name:     "GRANT/REVOKE privilege change",
+            severity: Severity::Warning,
+            category: RuleCategory::Security
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        let upper = query.raw.to_uppercase();
+        let trimmed = upper.trim_start();
+        let is_grant = trimmed.starts_with("GRANT ");
+        if !is_grant && !trimmed.starts_with("REVOKE ") {
+            return vec![];
+        }
+        let dangerous = is_grant
+            && DANGEROUS_GRANT_MARKERS
+                .iter()
+                .any(|marker| upper.contains(marker));
+        let info = self.info();
+        let (severity, message) = if dangerous {
+            (
+                Severity::Error,
+                "GRANT hands out broad or public privileges".to_string()
+            )
+        } else {
+            (
+                info.severity,
+                "Privilege change statement found in query set".to_string()
+            )
+        };
+        vec![Violation {
+            rule_id: info.id,
+            rule_name: info.name,
+            message,
+            severity,
+            category: info.category,
+            suggestion: Some(
+                "Keep GRANT/REVOKE in reviewed migrations and grant the narrowest privileges needed"
+                    .to_string()
+            ),
+            query_index
+        }]
+    }
+}
+
 /// Detects plaintext credentials embedded in SQL statements
 ///
 /// Secrets committed inside query files leak through source control, slow
