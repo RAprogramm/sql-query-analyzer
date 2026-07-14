@@ -471,6 +471,33 @@ fn test_distinct_with_order_by() {
 }
 
 #[test]
+fn test_join_on_non_indexed_column_flagged() {
+    let schema = r#"
+        CREATE TABLE users (id INT PRIMARY KEY);
+        CREATE TABLE orders (id INT PRIMARY KEY, user_id INT);
+    "#;
+    let violations = analyze_with_schema(
+        "SELECT u.id FROM users u JOIN orders o ON o.user_id = u.id WHERE u.id > 0 LIMIT 10",
+        schema
+    );
+    assert!(violations.contains(&"SCHEMA004".to_string()));
+}
+
+#[test]
+fn test_join_on_indexed_column_ok() {
+    let schema = r#"
+        CREATE TABLE users (id INT PRIMARY KEY);
+        CREATE TABLE orders (id INT PRIMARY KEY, user_id INT);
+        CREATE INDEX idx_orders_user_id ON orders(user_id);
+    "#;
+    let violations = analyze_with_schema(
+        "SELECT u.id FROM users u JOIN orders o ON o.user_id = u.id WHERE u.id > 0 LIMIT 10",
+        schema
+    );
+    assert!(!violations.contains(&"SCHEMA004".to_string()));
+}
+
+#[test]
 fn test_schema_missing_index() {
     let schema = "CREATE TABLE users (id INT PRIMARY KEY, email VARCHAR(255))";
     let violations = analyze_with_schema(

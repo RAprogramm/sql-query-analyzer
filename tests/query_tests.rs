@@ -502,3 +502,17 @@ fn test_clickhouse_format_datetime() {
     let queries = parse_queries(sql, SqlDialect::ClickHouse).unwrap();
     assert_eq!(queries.len(), 1);
 }
+
+#[test]
+fn test_plain_join_extracts_join_cols() {
+    let sql = "SELECT u.id FROM users u JOIN orders o ON o.user_id = u.id";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert!(!queries[0].join_cols.is_empty());
+}
+
+#[test]
+fn test_left_join_extracts_join_cols() {
+    let sql = "SELECT u.id FROM users u LEFT JOIN orders o ON o.user_id = u.id";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert!(!queries[0].join_cols.is_empty());
+}

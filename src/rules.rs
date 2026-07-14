@@ -26,7 +26,7 @@
 //! - **Performance** (`PERF001`-`PERF020`) - Query optimization issues
 //! - **Style** (`STYLE001`-`STYLE004`) - Best practice violations
 //! - **Security** (`SEC001`-`SEC008`) - Dangerous operations
-//! - **Schema** (`SCHEMA001`-`SCHEMA003`) - Schema validation (requires schema)
+//! - **Schema** (`SCHEMA001`-`SCHEMA004`) - Schema validation (requires schema)
 //!
 //! # Configuration
 //!
@@ -245,7 +245,7 @@ impl RuleRunner {
     ///
     /// # Notes
     ///
-    /// - Adds schema-aware rules (SCHEMA001-SCHEMA003) if not disabled
+    /// - Adds schema-aware rules (SCHEMA001-SCHEMA004) if not disabled
     /// - Updates severity cache for schema rules
     pub fn with_schema_and_config(schema: Schema, config: RulesConfig) -> Self {
         let mut runner = Self::with_config(config.clone());
@@ -254,7 +254,8 @@ impl RuleRunner {
                 schema.clone()
             )),
             Box::new(schema_aware::ColumnNotInSchema::new(schema.clone())),
-            Box::new(schema_aware::SuggestIndex::new(schema)),
+            Box::new(schema_aware::SuggestIndex::new(schema.clone())),
+            Box::new(schema_aware::JoinOnNonIndexedColumn::new(schema)),
         ];
         for rule in schema_rules {
             if !config
