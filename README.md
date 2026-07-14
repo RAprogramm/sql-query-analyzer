@@ -38,7 +38,7 @@ A comprehensive SQL analysis tool that combines fast, deterministic static analy
 
 ## Highlights
 
-- **24 Built-in Rules** — Performance, style, and security checks run instantly without API calls
+- **25 Built-in Rules** — Performance, style, and security checks run instantly without API calls
 - **Schema-Aware Analysis** — Validates queries against your database schema, suggests missing indexes
 - **Multi-Dialect Support** — Generic, MySQL, PostgreSQL, SQLite, and ClickHouse with preprocessor for dialect-specific syntax
 - **Multiple Output Formats** — Text, JSON, YAML, and SARIF for CI/CD integration
@@ -98,6 +98,7 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql --provider openai
 | `PERF009` | NOT IN with subquery | Warning | Can cause unexpected NULL behavior |
 | `PERF010` | UNION without ALL | Info | Unnecessary deduplication overhead |
 | `PERF011` | Select without where | Info | Full table scan on large tables |
+| `PERF012` | COUNT(*) without WHERE | Warning | Counting every row scans the entire table |
 | `PERF013` | ORDER BY RAND() | Warning | Full scan and sort regardless of `LIMIT` |
 
 ### Style Rules
@@ -323,7 +324,7 @@ For fast CI checks without external API calls:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-This runs all 24 built-in rules instantly without requiring any API keys.
+This runs all 25 built-in rules instantly without requiring any API keys.
 
 #### Advanced Usage
 
@@ -443,7 +444,7 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql
                       ▼
          ┌────────────────────────┐
          │    Static Analysis     │
-         │  (24 rules, parallel)  │
+         │  (25 rules, parallel)  │
          └────────────┬───────────┘
                       │
                       ▼

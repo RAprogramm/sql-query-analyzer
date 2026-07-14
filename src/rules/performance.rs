@@ -414,6 +414,50 @@ impl Rule for OrderByRandom {
     }
 }
 
+/// COUNT(*) without WHERE scans the whole table
+///
+/// Counting every row cannot use an index shortcut on most engines; the
+/// query time grows linearly with table size and can block writes on busy
+/// tables. Existence checks and cached or estimated counts are cheaper.
+pub struct CountWithoutWhere;
+
+impl Rule for CountWithoutWhere {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "PERF012",
+            name:     "COUNT(*) without WHERE",
+            severity: Severity::Warning,
+            category: RuleCategory::Performance
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        if query.query_type != QueryType::Select {
+            return vec![];
+        }
+        if !query.where_cols.is_empty() || query.tables.is_empty() {
+            return vec![];
+        }
+        let upper = query.raw.to_uppercase();
+        if !upper.contains("COUNT(") {
+            return vec![];
+        }
+        let info = self.info();
+        vec![Violation {
+            rule_id: info.id,
+            rule_name: info.name,
+            message: "COUNT without WHERE clause scans the entire table".to_string(),
+            severity: info.severity,
+            category: info.category,
+            suggestion: Some(
+                "Add a WHERE clause, use EXISTS for existence checks, or cache/estimate counts for large tables"
+                    .to_string()
+            ),
+            query_index
+        }]
+    }
+}
+
 /// DISTINCT with ORDER BY can be inefficient
 pub struct DistinctWithOrderBy;
 

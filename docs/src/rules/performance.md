@@ -113,6 +113,22 @@ impossible or acceptable.
 
 Full table scan; intentional only for small reference tables.
 
+## PERF012 — COUNT(*) without WHERE (Warning)
+
+Counting every row cannot take an index shortcut on most engines; time grows
+linearly with table size and the scan can block writes on busy tables.
+
+```sql
+-- Flagged
+SELECT COUNT(*) FROM users;
+
+-- Better: existence check
+SELECT EXISTS(SELECT 1 FROM users LIMIT 1);
+
+-- Better: bounded count
+SELECT COUNT(*) FROM users WHERE created_at > '2026-01-01';
+```
+
 ## PERF013 — ORDER BY RAND() (Warning)
 
 The database generates a random value for every row and sorts the whole set
