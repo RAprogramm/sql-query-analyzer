@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: 2026 RAprogramm
+# SPDX-License-Identifier: MIT
+
+name: Publish Tagged Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish to crates.io (e.g. v0.6.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-version
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish ${{ inputs.tag }} to crates.io
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88 # master
+        with:
+          toolchain: stable
+
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          output=$(cargo publish --allow-dirty 2>&1) || {
+            if echo "$output" | grep -q "already exists"; then
+              echo "::notice::Version already published to crates.io"
+              exit 0
+            else
+              echo "$output"
+              exit 1
+            fi
+          }
