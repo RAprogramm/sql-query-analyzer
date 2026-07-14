@@ -606,6 +606,61 @@ impl Rule for HavingWithoutAggregate {
     }
 }
 
+/// DISTINCT that likely papers over a join fan-out
+///
+/// DISTINCT combined with JOIN usually hides duplicate rows produced by a
+/// missing or too-loose join condition; deduplication then costs a sort or
+/// hash over the whole result. `SELECT DISTINCT *` escalates to Warning —
+/// deduplicating entire rows is almost never intended.
+pub struct UnnecessaryDistinct;
+
+impl Rule for UnnecessaryDistinct {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "PERF014",
+            name:     "Potentially unnecessary DISTINCT",
+            severity: Severity::Info,
+            category: RuleCategory::Performance
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        if query.query_type != QueryType::Select || !query.has_distinct {
+            return vec![];
+        }
+        let upper = query.raw.to_uppercase();
+        let distinct_star = upper.contains("SELECT DISTINCT *");
+        let distinct_with_join = query.tables.len() > 1;
+        if !distinct_star && !distinct_with_join {
+            return vec![];
+        }
+        let info = self.info();
+        let (severity, message) = if distinct_star {
+            (
+                Severity::Warning,
+                "SELECT DISTINCT * deduplicates entire rows".to_string()
+            )
+        } else {
+            (
+                info.severity,
+                "DISTINCT combined with JOIN often hides join fan-out".to_string()
+            )
+        };
+        vec![Violation {
+            rule_id: info.id,
+            rule_name: info.name,
+            message,
+            severity,
+            category: info.category,
+            suggestion: Some(
+                "Check the join conditions for fan-out before deduplicating; select explicit columns instead of DISTINCT *"
+                    .to_string()
+            ),
+            query_index
+        }]
+    }
+}
+
 /// DISTINCT with ORDER BY can be inefficient
 pub struct DistinctWithOrderBy;
 
