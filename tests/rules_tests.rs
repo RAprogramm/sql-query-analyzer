@@ -204,6 +204,45 @@ fn test_no_having_not_flagged() {
     assert!(!violations.contains(&"PERF018".to_string()));
 }
 
+#[test]
+fn test_three_level_nesting_flagged_info() {
+    let queries = parse_queries(
+        "SELECT id FROM a WHERE x IN (SELECT y FROM b WHERE z IN (SELECT w FROM c WHERE v = 1)) LIMIT 10",
+        SqlDialect::Generic
+    )
+    .unwrap();
+    let report = RuleRunner::new().analyze(&queries);
+    let violation = report
+        .violations
+        .iter()
+        .find(|v| v.rule_id == "PERF020")
+        .unwrap();
+    assert_eq!(violation.severity, Severity::Info);
+}
+
+#[test]
+fn test_single_subquery_not_flagged() {
+    let violations =
+        analyze_query("SELECT id FROM a WHERE x IN (SELECT y FROM b WHERE z = 1) LIMIT 10");
+    assert!(!violations.contains(&"PERF020".to_string()));
+}
+
+#[test]
+fn test_five_level_nesting_is_error() {
+    let queries = parse_queries(
+        "SELECT id FROM a WHERE x IN (SELECT y FROM b WHERE z IN (SELECT w FROM c WHERE v IN (SELECT u FROM d WHERE t IN (SELECT s FROM e WHERE r = 1)))) LIMIT 10",
+        SqlDialect::Generic
+    )
+    .unwrap();
+    let report = RuleRunner::new().analyze(&queries);
+    let violation = report
+        .violations
+        .iter()
+        .find(|v| v.rule_id == "PERF020")
+        .unwrap();
+    assert_eq!(violation.severity, Severity::Error);
+}
+
 fn in_list_query(n: usize) -> String {
     let values: Vec<String> = (1..=n).map(|i| i.to_string()).collect();
     format!(

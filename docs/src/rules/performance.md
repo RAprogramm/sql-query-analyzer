@@ -194,3 +194,20 @@ SELECT * FROM users WHERE id IN (1, 2, 3, /* …60 more… */ 64);
 
 -- Better: JOIN against a temporary table, or batch the lookups
 ```
+
+## PERF020 — Deeply nested subqueries (Warning)
+
+Each nesting level multiplies planning complexity and usually hides a JOIN or
+CTE that would express the same logic flatter. Severity scales with total
+SELECT depth: three levels is Info, four Warning, five or more Error.
+
+```sql
+-- Flagged (3 levels)
+SELECT * FROM a WHERE x IN (
+    SELECT y FROM b WHERE z IN (SELECT w FROM c WHERE v = 1));
+
+-- Better: name the steps
+WITH matching_c AS (SELECT w FROM c WHERE v = 1),
+     matching_b AS (SELECT y FROM b JOIN matching_c ON b.z = matching_c.w)
+SELECT a.* FROM a JOIN matching_b ON a.x = matching_b.y;
+```
