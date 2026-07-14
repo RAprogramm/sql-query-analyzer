@@ -128,6 +128,30 @@ fn test_function_args_not_ordinal() {
 }
 
 #[test]
+fn test_count_star_without_where() {
+    let violations = analyze_query("SELECT COUNT(*) FROM users");
+    assert!(violations.contains(&"PERF012".to_string()));
+}
+
+#[test]
+fn test_count_one_without_where() {
+    let violations = analyze_query("SELECT COUNT(1) FROM orders");
+    assert!(violations.contains(&"PERF012".to_string()));
+}
+
+#[test]
+fn test_count_with_where_ok() {
+    let violations = analyze_query("SELECT COUNT(*) FROM users WHERE status = 'active'");
+    assert!(!violations.contains(&"PERF012".to_string()));
+}
+
+#[test]
+fn test_select_without_count_not_perf012() {
+    let violations = analyze_query("SELECT id FROM users");
+    assert!(!violations.contains(&"PERF012".to_string()));
+}
+
+#[test]
 fn test_order_by_rand_mysql() {
     let violations = analyze_query("SELECT id FROM users ORDER BY RAND() LIMIT 5");
     assert!(violations.contains(&"PERF013".to_string()));
