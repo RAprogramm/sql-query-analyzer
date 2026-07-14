@@ -38,7 +38,7 @@ A comprehensive SQL analysis tool that combines fast, deterministic static analy
 
 ## Highlights
 
-- **26 Built-in Rules** — Performance, style, and security checks run instantly without API calls
+- **27 Built-in Rules** — Performance, style, and security checks run instantly without API calls
 - **Schema-Aware Analysis** — Validates queries against your database schema, suggests missing indexes
 - **Multi-Dialect Support** — Generic, MySQL, PostgreSQL, SQLite, and ClickHouse with preprocessor for dialect-specific syntax
 - **Multiple Output Formats** — Text, JSON, YAML, and SARIF for CI/CD integration
@@ -119,6 +119,7 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql --provider openai
 | `SEC004` | DROP detected | Error | Permanent data/schema destruction |
 | `SEC005` | GRANT/REVOKE detected | Warning | Privilege changes belong in reviewed migrations; broad grants escalate to Error |
 | `SEC006` | SQL injection pattern | Error | Always-true `OR` tautology (`OR 1 = 1`) |
+| `SEC007` | Dynamic SQL execution | Warning | `EXEC`/`EXECUTE`/`PREPARE` runs a string assembled at runtime |
 | `SEC008` | Hardcoded credential | Error | Plaintext secret in `IDENTIFIED BY`, `SET PASSWORD`, or a sensitive column |
 
 ### Schema-Aware Rules
@@ -325,7 +326,7 @@ For fast CI checks without external API calls:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-This runs all 26 built-in rules instantly without requiring any API keys.
+This runs all 27 built-in rules instantly without requiring any API keys.
 
 #### Advanced Usage
 
@@ -445,7 +446,7 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql
                       ▼
          ┌────────────────────────┐
          │    Static Analysis     │
-         │  (26 rules, parallel)  │
+         │  (27 rules, parallel)  │
          └────────────┬───────────┘
                       │
                       ▼

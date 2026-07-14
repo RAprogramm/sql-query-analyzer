@@ -211,6 +211,7 @@ impl RuleRunner {
             Box::new(security::InjectionTautology),
             Box::new(security::HardcodedCredential),
             Box::new(security::PrivilegeChange),
+            Box::new(security::DynamicSqlExecution),
         ];
         let rules: Vec<Box<dyn Rule>> = all_rules
             .into_iter()

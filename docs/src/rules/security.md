@@ -75,6 +75,22 @@ stripped and stacked statements are split apart. If this pattern shows up in
 extracted application queries, replace string concatenation with
 parameterized queries.
 
+## SEC007 — Dynamic SQL execution
+
+`EXEC`/`EXECUTE`/`PREPARE` run SQL assembled at runtime; if any part of that
+string comes from user input, the construct is an injection vector the outer
+statement hides from static analysis.
+
+```sql
+-- Flagged
+EXEC('SELECT * FROM users');
+EXECUTE IMMEDIATE 'SELECT * FROM ' || table_name;
+PREPARE stmt FROM @sql;
+
+-- Safer: parameterized execution
+EXEC sp_executesql @sql, N'@id INT', @id = @user_id;
+```
+
 ## SEC008 — Hardcoded credential
 
 Secrets embedded in SQL leak through source control, slow query logs, and
