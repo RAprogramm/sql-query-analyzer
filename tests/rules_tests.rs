@@ -196,6 +196,37 @@ fn test_or_different_literals_not_tautology() {
 }
 
 #[test]
+fn test_hardcoded_credential_insert() {
+    let violations =
+        analyze_query("INSERT INTO users (email, password) VALUES ('a@b.c', 'admin123')");
+    assert!(violations.contains(&"SEC008".to_string()));
+}
+
+#[test]
+fn test_hardcoded_credential_update_assignment() {
+    let violations = analyze_query("UPDATE users SET api_key = 'sk-live-abc123' WHERE id = 1");
+    assert!(violations.contains(&"SEC008".to_string()));
+}
+
+#[test]
+fn test_hardcoded_credential_prefixed_column() {
+    let violations = analyze_query("UPDATE users SET user_password = 'hunter2' WHERE id = 1");
+    assert!(violations.contains(&"SEC008".to_string()));
+}
+
+#[test]
+fn test_insert_without_sensitive_columns_ok() {
+    let violations = analyze_query("INSERT INTO users (email, name) VALUES ('a@b.c', 'Alice')");
+    assert!(!violations.contains(&"SEC008".to_string()));
+}
+
+#[test]
+fn test_author_column_not_credential() {
+    let violations = analyze_query("UPDATE posts SET author = 'Alice' WHERE id = 1");
+    assert!(!violations.contains(&"SEC008".to_string()));
+}
+
+#[test]
 fn test_update_without_where() {
     let violations = analyze_query("UPDATE users SET status = 'inactive'");
     assert!(violations.contains(&"SEC001".to_string()));
