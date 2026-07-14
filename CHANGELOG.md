@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add PERF016 rule detecting repeated scans of the same table ([#109](https://github.com/RAprogramm/sql-query-analyzer/issues/109)) ([f90d28e](https://github.com/RAprogramm/sql-query-analyzer/commit/f90d28eee3976cd4977eddd0c115f0ad2e0030c0))
+
+### Documentation
+
+- Update changelog [skip ci] ([f72898f](https://github.com/RAprogramm/sql-query-analyzer/commit/f72898f998745131e3cc5c3458e378457c993222))
+
+## [0.14.0] - 2026-07-14
+
+### Added
+
 - Add PERF015 rule detecting implicit type conversion ([#108](https://github.com/RAprogramm/sql-query-analyzer/issues/108)) ([dd1ee39](https://github.com/RAprogramm/sql-query-analyzer/commit/dd1ee396fb1c26b7c06ef25f36645f1dc673a4c0))
 
 ### Documentation
@@ -313,7 +323,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Use rustls instead of openssl for cross-compilation ([2bdf030](https://github.com/RAprogramm/sql-query-analyzer/commit/2bdf03097c563bce1c7b70eb613f6d58bc52b0c2))
 
-[Unreleased]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.10.0...v0.11.0
