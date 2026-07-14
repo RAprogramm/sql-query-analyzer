@@ -165,6 +165,23 @@ SELECT DISTINCT * FROM users u JOIN orders o ON o.user_id = u.id;
 SELECT DISTINCT status FROM orders;
 ```
 
+## PERF015 — Implicit type conversion (Warning, needs schema)
+
+Comparing a text column to a bare number forces a cast on every row; on most
+engines the column side is cast, which disables its index and can silently
+change matching semantics.
+
+```sql
+-- schema.sql
+CREATE TABLE users (id INT PRIMARY KEY, phone VARCHAR(20));
+
+-- Flagged
+SELECT id FROM users WHERE phone = 5551234;
+
+-- Better
+SELECT id FROM users WHERE phone = '5551234';
+```
+
 ## PERF018 — HAVING without aggregate (Warning)
 
 `HAVING` filters after grouping; a condition on plain columns forces the

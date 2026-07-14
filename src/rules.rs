@@ -255,7 +255,8 @@ impl RuleRunner {
             )),
             Box::new(schema_aware::ColumnNotInSchema::new(schema.clone())),
             Box::new(schema_aware::SuggestIndex::new(schema.clone())),
-            Box::new(schema_aware::JoinOnNonIndexedColumn::new(schema)),
+            Box::new(schema_aware::JoinOnNonIndexedColumn::new(schema.clone())),
+            Box::new(schema_aware::ImplicitTypeConversion::new(schema)),
         ];
         for rule in schema_rules {
             if !config
