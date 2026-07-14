@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Update changelog [skip ci] ([67f0845](https://github.com/RAprogramm/sql-query-analyzer/commit/67f0845984a4297c889ffb78fbdd4a42bbb58e70))
+
+## [0.7.0] - 2026-07-14
+
+### Documentation
+
 - Update changelog [skip ci] ([e233647](https://github.com/RAprogramm/sql-query-analyzer/commit/e2336476716b9fdcde8ea79170faa62c7b599889))
 
 ## [0.6.0] - 2026-07-14
@@ -175,7 +181,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Use rustls instead of openssl for cross-compilation ([2bdf030](https://github.com/RAprogramm/sql-query-analyzer/commit/2bdf03097c563bce1c7b70eb613f6d58bc52b0c2))
 
-[Unreleased]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.4.1...v0.5.2
 [0.4.1]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.4.0...v0.4.1
