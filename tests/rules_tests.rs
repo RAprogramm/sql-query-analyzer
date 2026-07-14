@@ -182,6 +182,37 @@ fn test_distinct_single_table_ok() {
 }
 
 #[test]
+fn test_correlated_exists_flagged() {
+    let violations = analyze_query(
+        "SELECT id FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id) LIMIT 10"
+    );
+    assert!(violations.contains(&"PERF017".to_string()));
+}
+
+#[test]
+fn test_correlated_scalar_projection_flagged() {
+    let violations = analyze_query(
+        "SELECT name, (SELECT MAX(total) FROM orders WHERE user_id = users.id) FROM users WHERE id > 0 LIMIT 10"
+    );
+    assert!(violations.contains(&"PERF017".to_string()));
+}
+
+#[test]
+fn test_uncorrelated_in_subquery_ok() {
+    let violations =
+        analyze_query("SELECT id FROM users WHERE id IN (SELECT user_id FROM orders) LIMIT 10");
+    assert!(!violations.contains(&"PERF017".to_string()));
+}
+
+#[test]
+fn test_literal_dot_not_correlated() {
+    let violations = analyze_query(
+        "SELECT id FROM users WHERE id IN (SELECT user_id FROM orders WHERE note = 'a@b.com') LIMIT 10"
+    );
+    assert!(!violations.contains(&"PERF017".to_string()));
+}
+
+#[test]
 fn test_repeated_table_scan_flagged() {
     let violations = analyze_query(
         "SELECT id FROM orders WHERE amount > (SELECT AVG(amount) FROM orders) LIMIT 10"

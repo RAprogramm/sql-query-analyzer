@@ -802,6 +802,154 @@ impl Rule for RepeatedTableScan {
     }
 }
 
+/// Correlated subqueries re-execute per outer row
+///
+/// A subquery that references a table or alias of the outer query cannot be
+/// evaluated once; the engine re-runs it for every candidate row. JOINs or
+/// window functions usually express the same logic with a single pass.
+pub struct CorrelatedSubquery;
+
+/// Extracts each balanced `(SELECT …)` body from the statement.
+fn subquery_bodies(upper: &str) -> Vec<&str> {
+    let mut bodies = Vec::new();
+    let mut search_from = 0;
+    while let Some(pos) = upper[search_from..].find("(SELECT") {
+        let start = search_from + pos + 1;
+        let mut depth = 1usize;
+        let mut end = start;
+        for (i, b) in upper[start..].bytes().enumerate() {
+            match b {
+                b'(' => depth += 1,
+                b')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = start + i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if end > start {
+            bodies.push(&upper[start..end]);
+        }
+        search_from = start;
+    }
+    bodies
+}
+
+/// Collects table names and aliases declared by FROM/JOIN inside a body.
+fn body_sources(body: &str) -> Vec<&str> {
+    let mut sources = Vec::new();
+    let tokens: Vec<&str> = body
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+        .filter(|t| !t.is_empty())
+        .collect();
+    let alias_stoppers = [
+        "ON", "WHERE", "JOIN", "LEFT", "RIGHT", "INNER", "FULL", "CROSS", "GROUP", "ORDER",
+        "LIMIT", "HAVING", "UNION", "SELECT", "AS"
+    ];
+    let mut i = 0;
+    while i < tokens.len() {
+        if (tokens[i] == "FROM" || tokens[i] == "JOIN")
+            && let Some(table) = tokens.get(i + 1)
+        {
+            sources.push(*table);
+            if let Some(alias) = tokens.get(i + 2)
+                && !alias_stoppers.contains(alias)
+                && !alias.chars().next().is_some_and(|c| c.is_ascii_digit())
+            {
+                sources.push(*alias);
+            }
+        }
+        i += 1;
+    }
+    sources
+}
+
+/// Replaces single-quoted string literal contents with spaces so dots in
+/// literals ('a@example.com') never look like qualified column references.
+fn mask_string_literals(body: &str) -> String {
+    let mut masked = String::with_capacity(body.len());
+    let mut in_quote = false;
+    for c in body.chars() {
+        if c == '\'' {
+            in_quote = !in_quote;
+            masked.push(' ');
+        } else {
+            masked.push(if in_quote { ' ' } else { c });
+        }
+    }
+    masked
+}
+
+/// Returns true when the body qualifies a column with a prefix that is not
+/// declared inside the body itself — i.e. it references the outer query.
+fn references_outer_source(raw_body: &str) -> bool {
+    let body = &mask_string_literals(raw_body);
+    let sources = body_sources(body);
+    let bytes = body.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'.' && i > 0 {
+            let mut start = i;
+            while start > 0 {
+                let c = bytes[start - 1];
+                if c.is_ascii_alphanumeric() || c == b'_' {
+                    start -= 1;
+                } else {
+                    break;
+                }
+            }
+            let prefix = &body[start..i];
+            if !prefix.is_empty()
+                && !prefix.chars().next().is_some_and(|c| c.is_ascii_digit())
+                && !sources.contains(&prefix)
+            {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
+impl Rule for CorrelatedSubquery {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "PERF017",
+            name:     "Correlated subquery",
+            severity: Severity::Warning,
+            category: RuleCategory::Performance
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        if query.query_type != QueryType::Select || !query.has_subquery {
+            return vec![];
+        }
+        let upper = query.raw.to_uppercase();
+        if !subquery_bodies(&upper)
+            .iter()
+            .any(|body| references_outer_source(body))
+        {
+            return vec![];
+        }
+        let info = self.info();
+        vec![Violation {
+            rule_id: info.id,
+            rule_name: info.name,
+            message: "Correlated subquery re-executes for every outer row".to_string(),
+            severity: info.severity,
+            category: info.category,
+            suggestion: Some(
+                "Rewrite as a JOIN or window function so the inner data is read once".to_string()
+            ),
+            query_index
+        }]
+    }
+}
+
 /// DISTINCT with ORDER BY can be inefficient
 pub struct DistinctWithOrderBy;
 
