@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT
 
 # Rules Overview
 
-31 built-in rules across four categories. Every rule has a stable ID, a default
+32 built-in rules across four categories. Every rule has a stable ID, a default
 severity, and a suggestion attached to each violation. Rules can be disabled or
 re-weighted via [configuration](../configuration.md).
 
@@ -14,7 +14,7 @@ re-weighted via [configuration](../configuration.md).
 | [Performance](performance.md) | `PERF001`–`PERF020` | Index usage, table scans, N+1 patterns |
 | [Style](style.md) | `STYLE001`–`STYLE004` | Readability and maintainability |
 | [Security](security.md) | `SEC001`–`SEC008` | Destructive statements without guards |
-| [Schema-Aware](schema.md) | `SCHEMA001`–`SCHEMA003` | Cross-checking queries against DDL |
+| [Schema-Aware](schema.md) | `SCHEMA001`–`SCHEMA004` | Cross-checking queries against DDL |
 
 ## Severities
 

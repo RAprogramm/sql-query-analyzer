@@ -139,6 +139,90 @@ impl Rule for ColumnNotInSchema {
     }
 }
 
+/// JOIN columns must lead an index of their own table
+///
+/// SCHEMA001 only asks whether a column name is indexed anywhere in the
+/// schema; a join still degrades to a per-row scan when the joined table
+/// itself lacks an index that starts with the join column. This rule checks
+/// the joined tables precisely: the column must exist in the table and be
+/// the leading column of one of that table's indexes.
+pub struct JoinOnNonIndexedColumn {
+    schema: Schema
+}
+
+impl JoinOnNonIndexedColumn {
+    pub fn new(schema: Schema) -> Self {
+        Self {
+            schema
+        }
+    }
+}
+
+impl Rule for JoinOnNonIndexedColumn {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "SCHEMA004",
+            name:     "JOIN on non-indexed column",
+            severity: Severity::Warning,
+            category: RuleCategory::Performance
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        if query.query_type != QueryType::Select || query.join_cols.is_empty() {
+            return vec![];
+        }
+        let mut violations = Vec::new();
+        for table_name in &query.tables {
+            let Some(table) = self
+                .schema
+                .tables
+                .values()
+                .find(|t| t.name.eq_ignore_ascii_case(table_name))
+            else {
+                continue;
+            };
+            for col in &query.join_cols {
+                let Some(column) = table
+                    .columns
+                    .iter()
+                    .find(|c| c.name.eq_ignore_ascii_case(col))
+                else {
+                    continue;
+                };
+                let leads_index = column.is_primary
+                    || table.indexes.iter().any(|idx| {
+                        idx.columns
+                            .first()
+                            .is_some_and(|first| first.eq_ignore_ascii_case(col))
+                    });
+                if !leads_index {
+                    let info = self.info();
+                    violations.push(Violation {
+                        rule_id: info.id,
+                        rule_name: info.name,
+                        message: format!(
+                            "JOIN column '{}' of table '{}' does not lead any index",
+                            col, table.name
+                        ),
+                        severity: info.severity,
+                        category: info.category,
+                        suggestion: Some(format!(
+                            "CREATE INDEX idx_{}_{} ON {}({})",
+                            table.name.to_lowercase(),
+                            col.to_lowercase(),
+                            table.name,
+                            col
+                        )),
+                        query_index
+                    });
+                }
+            }
+        }
+        violations
+    }
+}
+
 /// Suggest indexes based on query patterns
 pub struct SuggestIndex {
     schema: Schema
