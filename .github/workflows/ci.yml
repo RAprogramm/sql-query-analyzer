@@ -168,7 +168,7 @@ jobs:
   # Stage 5: Changelog (only on main after build)
   changelog:
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.result == 'success'
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.result == 'success'
     permissions:
       contents: write
     uses: ./.github/workflows/_changelog.yml
