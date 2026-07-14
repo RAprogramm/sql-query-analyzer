@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add PERF020 rule detecting deeply nested subqueries ([#106](https://github.com/RAprogramm/sql-query-analyzer/issues/106)) ([12e1dfd](https://github.com/RAprogramm/sql-query-analyzer/commit/12e1dfd7977689241a0329c14c8df5f831f95cf4))
+
+### Documentation
+
+- Update changelog [skip ci] ([f807ce9](https://github.com/RAprogramm/sql-query-analyzer/commit/f807ce9b5644363f47026e1ac2053406d3c6ef4b))
+
+## [0.11.0] - 2026-07-14
+
+### Added
+
 - Add PERF014 rule detecting unnecessary DISTINCT ([#105](https://github.com/RAprogramm/sql-query-analyzer/issues/105)) ([59074da](https://github.com/RAprogramm/sql-query-analyzer/commit/59074da7c116f078cda312977220e3275d735a01))
 
 ### Documentation
@@ -283,7 +293,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Use rustls instead of openssl for cross-compilation ([2bdf030](https://github.com/RAprogramm/sql-query-analyzer/commit/2bdf03097c563bce1c7b70eb613f6d58bc52b0c2))
 
-[Unreleased]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.7.0...v0.8.0
