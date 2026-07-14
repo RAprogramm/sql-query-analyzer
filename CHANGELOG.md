@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add PERF018 rule detecting HAVING without aggregate ([#104](https://github.com/RAprogramm/sql-query-analyzer/issues/104)) ([8c71fc8](https://github.com/RAprogramm/sql-query-analyzer/commit/8c71fc80a4bfe6ede940586d7075612cd604f233))
+
+### Documentation
+
+- Update changelog [skip ci] ([5942c42](https://github.com/RAprogramm/sql-query-analyzer/commit/5942c4218f25b5c7da061e98c7d83efeb17cce5e))
+
+## [0.9.0] - 2026-07-14
+
+### Added
+
 - Add PERF019 rule detecting large IN clauses ([#103](https://github.com/RAprogramm/sql-query-analyzer/issues/103)) ([4ad7e9b](https://github.com/RAprogramm/sql-query-analyzer/commit/4ad7e9b07e762b8c9d76e8d368d9a7fdf91a1947))
 
 ### Documentation
@@ -263,7 +273,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Use rustls instead of openssl for cross-compilation ([2bdf030](https://github.com/RAprogramm/sql-query-analyzer/commit/2bdf03097c563bce1c7b70eb613f6d58bc52b0c2))
 
-[Unreleased]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.5.2...v0.6.0
