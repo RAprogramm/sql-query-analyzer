@@ -123,6 +123,52 @@ impl Rule for DropDetected {
     }
 }
 
+/// Detects dynamic SQL execution statements
+///
+/// EXEC/EXECUTE/PREPARE run SQL assembled at runtime; when any part of that
+/// string comes from user input, the construct is an injection vector that
+/// static analysis of the outer statement cannot see through. Flags the
+/// SQL Server, Oracle/PostgreSQL, and MySQL spellings.
+pub struct DynamicSqlExecution;
+
+/// Statement openers that hand a runtime string to the SQL engine.
+const DYNAMIC_SQL_OPENERS: [&str; 4] = ["EXEC(", "EXEC ", "EXECUTE", "PREPARE "];
+
+impl Rule for DynamicSqlExecution {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "SEC007",
+            name:     "Dynamic SQL execution",
+            severity: Severity::Warning,
+            category: RuleCategory::Security
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        let upper = query.raw.to_uppercase();
+        let trimmed = upper.trim_start();
+        if !DYNAMIC_SQL_OPENERS
+            .iter()
+            .any(|opener| trimmed.starts_with(opener))
+        {
+            return vec![];
+        }
+        let info = self.info();
+        vec![Violation {
+            rule_id: info.id,
+            rule_name: info.name,
+            message: "Dynamic SQL execution runs a string assembled at runtime".to_string(),
+            severity: info.severity,
+            category: info.category,
+            suggestion: Some(
+                "Validate every input that reaches the executed string and prefer parameterized execution (sp_executesql, prepared statements with bound parameters)"
+                    .to_string()
+            ),
+            query_index
+        }]
+    }
+}
+
 /// Detects GRANT/REVOKE privilege changes in query files
 ///
 /// Privilege changes belong in reviewed migrations, not application query

@@ -220,6 +220,18 @@ fn test_or_different_literals_not_tautology() {
 }
 
 #[test]
+fn test_exec_string_flagged() {
+    let violations = analyze_query("EXECUTE my_procedure");
+    assert!(violations.contains(&"SEC007".to_string()));
+}
+
+#[test]
+fn test_select_not_dynamic_sql() {
+    let violations = analyze_query("SELECT id FROM users WHERE id = 1 LIMIT 5");
+    assert!(!violations.contains(&"SEC007".to_string()));
+}
+
+#[test]
 fn test_grant_statement_flagged() {
     let violations = analyze_query("GRANT SELECT ON users TO analyst");
     assert!(violations.contains(&"SEC005".to_string()));
