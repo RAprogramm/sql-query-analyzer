@@ -10,6 +10,7 @@ rules:
   use-trusted-publishing:
     ignore:
       - _publish.yml
+      - publish-version.yml
 
   # softprops/action-gh-release creates the release from generated notes
   # and attaches multiple asset globs in a single declarative step; the
