@@ -148,6 +148,22 @@ LIMIT 5;
 SELECT * FROM products ORDER BY random_sort LIMIT 5;
 ```
 
+## PERF018 — HAVING without aggregate (Warning)
+
+`HAVING` filters after grouping; a condition on plain columns forces the
+engine to group rows it could have discarded up front.
+
+```sql
+-- Flagged
+SELECT status, COUNT(*) FROM orders GROUP BY status HAVING status = 'active';
+
+-- Better: prune before grouping
+SELECT status, COUNT(*) FROM orders WHERE status = 'active' GROUP BY status;
+
+-- Correct HAVING usage is not flagged
+SELECT status, COUNT(*) FROM orders GROUP BY status HAVING COUNT(*) > 10;
+```
+
 ## PERF019 — Large IN clause (Warning)
 
 Very long `IN` lists blow up parse and plan time, defeat plan caching, and on

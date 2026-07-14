@@ -542,6 +542,70 @@ impl Rule for LargeInClause {
     }
 }
 
+/// HAVING without an aggregate belongs in WHERE
+///
+/// HAVING filters after grouping, so a condition on plain columns forces the
+/// engine to group rows it could have discarded up front. Moving the
+/// condition into WHERE prunes rows before the GROUP BY.
+pub struct HavingWithoutAggregate;
+
+/// Aggregate function openers that justify a HAVING clause.
+const AGGREGATE_OPENERS: [&str; 9] = [
+    "COUNT(",
+    "SUM(",
+    "AVG(",
+    "MIN(",
+    "MAX(",
+    "GROUP_CONCAT(",
+    "STRING_AGG(",
+    "STDDEV",
+    "VARIANCE"
+];
+
+impl Rule for HavingWithoutAggregate {
+    fn info(&self) -> RuleInfo {
+        RuleInfo {
+            id:       "PERF018",
+            name:     "HAVING without aggregate function",
+            severity: Severity::Warning,
+            category: RuleCategory::Performance
+        }
+    }
+
+    fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
+        if query.query_type != QueryType::Select || query.having_cols.is_empty() {
+            return vec![];
+        }
+        let upper = query.raw.to_uppercase();
+        let Some(having_pos) = upper.find(" HAVING ") else {
+            return vec![];
+        };
+        let having_part = &upper[having_pos + " HAVING ".len()..];
+        let clause_end = [" ORDER BY ", " LIMIT ", " OFFSET "]
+            .iter()
+            .filter_map(|t| having_part.find(t))
+            .min()
+            .unwrap_or(having_part.len());
+        let clause = &having_part[..clause_end];
+        if AGGREGATE_OPENERS.iter().any(|agg| clause.contains(agg)) {
+            return vec![];
+        }
+        let info = self.info();
+        vec![Violation {
+            rule_id: info.id,
+            rule_name: info.name,
+            message: "HAVING filters plain columns after grouping".to_string(),
+            severity: info.severity,
+            category: info.category,
+            suggestion: Some(
+                "Move non-aggregate conditions into WHERE so rows are pruned before GROUP BY"
+                    .to_string()
+            ),
+            query_index
+        }]
+    }
+}
+
 /// DISTINCT with ORDER BY can be inefficient
 pub struct DistinctWithOrderBy;
 
