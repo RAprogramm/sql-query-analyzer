@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: RAprogramm/rust-prod-diff-checker@887eced80cb9047d3fc202120f7d1cc484c8186b # v1.6.0
+      - uses: RAprogramm/rust-prod-diff-checker@2f7f2953eb242aeadc77fddda4302a7b4757ab7d # v2.0.1
         with:
           max-lines: 200
           format: comment
