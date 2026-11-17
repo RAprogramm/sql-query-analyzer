@@ -6,13 +6,12 @@ authors = ["RAprogramm <andrey.rozanov.vl@gmail.com>"]
 description = "Static analysis tool for SQL queries with 35 built-in rules for performance, security, and style"
 license = "MIT"
 repository = "https://github.com/RAprogramm/sql-query-analyzer"
-homepage = "https://github.com/RAprogramm/sql-query-analyzer"
 documentation = "https://docs.rs/sql-query-analyzer"
 readme = "README.md"
 keywords = ["sql", "analyzer", "linter", "performance", "database"]
 categories = ["development-tools", "command-line-utilities", "database"]
 exclude = [".github", "target", ".git"]
-rust-version = "1.97"
+rust-version = "1.100"
 
 [lib]
 name = "sql_query_analyzer"
@@ -34,7 +33,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 toml = "1"
-masterror = "0.29"
+masterror = "0.32"
 sqlparser = "0.64"
 smallvec = { version = "1", features = ["serde"] }
 indexmap = { version = "2", features = ["serde"] }
