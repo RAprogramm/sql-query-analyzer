@@ -93,7 +93,11 @@ pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<Ana
     let parsed_queries = parse_queries_cached(&queries_sql, sql_dialect)?;
     let schema_summary = parsed_schema.to_summary();
     let output_opts = create_output_options(params.output_format, params.no_color, params.verbose);
-    let runner = RuleRunner::with_schema_and_config(parsed_schema.clone(), config.rules.clone());
+    let runner = RuleRunner::with_schema_and_config_and_dialect(
+        sql_dialect,
+        parsed_schema.clone(),
+        config.rules.clone()
+    );
     let static_report = runner.analyze(&parsed_queries);
     let static_output = format_static_analysis(&static_report, &output_opts);
     let exit_code = calculate_exit_code(&static_report);
