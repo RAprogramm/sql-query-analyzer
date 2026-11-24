@@ -139,7 +139,9 @@ pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<Ana
     pb.enable_steady_tick(Duration::from_millis(100));
     let queries_summary = format_queries_summary(&parsed_queries, &output_opts);
     let client = LlmClient::with_retry_config(llm_provider, config.retry);
-    let analysis = client.analyze(&schema_summary, &queries_summary).await?;
+    let analysis = client
+        .analyze(&schema_summary, &queries_summary, sql_dialect)
+        .await?;
     pb.finish_and_clear();
     let llm_output = format_analysis_result(&parsed_queries, &analysis, &output_opts);
     Ok(AnalyzeResult {

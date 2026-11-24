@@ -44,8 +44,22 @@ use tokio::time::sleep;
 
 use crate::{
     config::RetryConfig,
-    error::{AppResult, http_error, llm_api_error}
+    error::{AppResult, http_error, llm_api_error},
+    query::SqlDialect
 };
+
+/// Prompt guidance for generic/OLTP dialects.
+const GENERIC_PROMPT: &str = "You are a database performance expert. Analyze the following SQL \
+                              queries for potential performance issues, especially regarding index \
+                              usage.";
+
+/// Prompt guidance for the ClickHouse dialect.
+const CLICKHOUSE_PROMPT: &str = "You are a ClickHouse performance expert. Analyze the following \
+                                 queries against a columnar OLAP store. Focus on: ORDER BY / \
+                                 primary-key prefix usage, partition pruning (PARTITION BY), data \
+                                 skipping indexes, avoiding SELECT * and FINAL, LowCardinality and \
+                                 Nullable choices, uniq vs uniqExact, countIf vs subqueries, and \
+                                 JOIN strategy (dictionaries/denormalization).";
 
 /// LLM provider configuration with authentication credentials.
 #[derive(Debug, Clone)]
@@ -166,17 +180,25 @@ impl LlmClient {
     }
 
     /// Analyze SQL queries using LLM with automatic retry
-    pub async fn analyze(&self, schema_summary: &str, queries_summary: &str) -> AppResult<String> {
+    pub async fn analyze(
+        &self,
+        schema_summary: &str,
+        queries_summary: &str,
+        dialect: SqlDialect
+    ) -> AppResult<String> {
+        let guidance = match dialect {
+            SqlDialect::ClickHouse => CLICKHOUSE_PROMPT,
+            _ => GENERIC_PROMPT
+        };
         let prompt = format!(
-            "You are a database performance expert. Analyze the following SQL queries \
-             for potential performance issues, especially regarding index usage.\n\n\
-             {schema}\n\n{queries}\n\n\
+            "{guidance}\n\n{schema}\n\n{queries}\n\n\
              For each query, identify:\n\
-             1. Whether existing indexes can be used effectively\n\
-             2. Missing indexes that would improve performance\n\
-             3. Full table scans or inefficient operations\n\
+             1. Whether the existing schema design is used effectively\n\
+             2. Missing schema features that would improve performance\n\
+             3. Full scans or inefficient operations\n\
              4. Suggestions for query optimization\n\
              Provide specific, actionable recommendations.",
+            guidance = guidance,
             schema = schema_summary,
             queries = queries_summary
         );
