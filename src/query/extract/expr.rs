@@ -30,20 +30,17 @@ pub fn extract_columns_from_expr(
         } => {
             extract_columns_from_expr(expr, columns);
         }
-        Expr::InList {
+        Expr::In {
             expr,
-            list,
+            target,
             ..
         } => {
             extract_columns_from_expr(expr, columns);
-            for item in list {
-                extract_columns_from_expr(item, columns);
+            if let sqlparser::ast::InTarget::List(list) = target {
+                for item in list {
+                    extract_columns_from_expr(item, columns);
+                }
             }
-        }
-        Expr::InSubquery {
-            expr, ..
-        } => {
-            extract_columns_from_expr(expr, columns);
         }
         Expr::Subquery(_)
         | Expr::Exists {
@@ -186,23 +183,27 @@ pub fn contains_subquery(expr: &sqlparser::ast::Expr) -> bool {
     use sqlparser::ast::Expr;
     match expr {
         Expr::Subquery(_)
-        | Expr::InSubquery {
-            ..
-        }
         | Expr::Exists {
             ..
         } => true,
+        Expr::In {
+            expr,
+            target,
+            ..
+        } => {
+            contains_subquery(expr)
+                || match target {
+                    sqlparser::ast::InTarget::List(list) => list.iter().any(contains_subquery),
+                    sqlparser::ast::InTarget::Subquery(_) => true,
+                    _ => false
+                }
+        }
         Expr::BinaryOp {
             left,
             right,
             ..
         } => contains_subquery(left) || contains_subquery(right),
         Expr::Nested(e) => contains_subquery(e),
-        Expr::InList {
-            expr,
-            list,
-            ..
-        } => contains_subquery(expr) || list.iter().any(contains_subquery),
         Expr::Case {
             operand,
             conditions,
