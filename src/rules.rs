@@ -280,14 +280,22 @@ impl RuleRunner {
     ) -> Self {
         let mut runner = Self::with_dialect_and_config(dialect, config.clone());
         let mut schema_rules: Vec<Box<dyn Rule>> = vec![
-            Box::new(schema_aware::MissingIndexOnFilterColumn::new(
-                schema.clone()
-            )),
             Box::new(schema_aware::ColumnNotInSchema::new(schema.clone())),
-            Box::new(schema_aware::SuggestIndex::new(schema.clone())),
-            Box::new(schema_aware::JoinOnNonIndexedColumn::new(schema.clone())),
             Box::new(schema_aware::ImplicitTypeConversion::new(schema.clone())),
         ];
+        // OLTP-style index suggestions (CREATE INDEX) do not apply to
+        // ClickHouse's sparse primary key; the CH002/CH005 rules cover that
+        // dialect instead.
+        if dialect != SqlDialect::ClickHouse {
+            let oltp_rules: Vec<Box<dyn Rule>> = vec![
+                Box::new(schema_aware::MissingIndexOnFilterColumn::new(
+                    schema.clone()
+                )),
+                Box::new(schema_aware::SuggestIndex::new(schema.clone())),
+                Box::new(schema_aware::JoinOnNonIndexedColumn::new(schema.clone())),
+            ];
+            schema_rules.extend(oltp_rules);
+        }
         if dialect == SqlDialect::ClickHouse {
             let ch_schema_rules: Vec<Box<dyn Rule>> = vec![
                 Box::new(clickhouse::FilterNotUsingPrimaryKey {
