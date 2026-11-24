@@ -24,8 +24,14 @@ pub fn extract_from_set_expr(set_expr: &sqlparser::ast::SetExpr, ctx: &mut Extra
                 }
             }
             for table in &select.from {
+                if matches!(table.relation, sqlparser::ast::TableFactor::Derived { .. }) {
+                    *ctx.has_subquery = true;
+                }
                 extract_from_table_factor(&table.relation, ctx.tables);
                 for join in &table.joins {
+                    if matches!(join.relation, sqlparser::ast::TableFactor::Derived { .. }) {
+                        *ctx.has_subquery = true;
+                    }
                     extract_from_table_factor(&join.relation, ctx.tables);
                     match &join.join_operator {
                         sqlparser::ast::JoinOperator::Join(constraint)

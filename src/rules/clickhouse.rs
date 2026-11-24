@@ -201,12 +201,11 @@ impl Rule for PartitionPruningMissed {
 /// Function call on a date/time column in WHERE prevents index usage.
 pub struct FunctionOnKeyColumn;
 
-const CH_DATE_FUNCTIONS: [&str; 12] = [
+const CH_DATE_FUNCTIONS: [&str; 11] = [
     "TODATE(",
     "TODATETIME(",
     "TOYEAR(",
     "TOMONTH(",
-    "TODAY(",
     "TOSTARTOFDAY(",
     "TOSTARTOFMONTH(",
     "TOSTARTOFWEEK(",
