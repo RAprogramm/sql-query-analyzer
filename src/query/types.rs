@@ -10,23 +10,27 @@ pub type ColumnVec = SmallVec<[CompactString; 8]>;
 /// Parsed SQL query with metadata
 #[derive(Debug, Clone, Serialize)]
 pub struct Query {
-    pub raw:          String,
-    pub query_type:   QueryType,
-    pub tables:       Vec<CompactString>,
-    pub cte_names:    Vec<CompactString>,
-    pub where_cols:   ColumnVec,
-    pub join_cols:    ColumnVec,
-    pub order_cols:   ColumnVec,
-    pub group_cols:   ColumnVec,
-    pub having_cols:  ColumnVec,
-    pub window_funcs: Vec<WindowFunction>,
-    pub limit:        Option<u64>,
-    pub offset:       Option<u64>,
-    pub has_union:    bool,
-    pub has_distinct: bool,
-    pub has_subquery: bool,
+    pub raw:           String,
+    pub query_type:    QueryType,
+    pub tables:        Vec<CompactString>,
+    pub cte_names:     Vec<CompactString>,
+    pub where_cols:    ColumnVec,
+    pub prewhere_cols: ColumnVec,
+    pub join_cols:     ColumnVec,
+    pub order_cols:    ColumnVec,
+    pub group_cols:    ColumnVec,
+    pub having_cols:   ColumnVec,
+    pub window_funcs:  Vec<WindowFunction>,
+    pub limit:         Option<u64>,
+    pub offset:        Option<u64>,
+    pub has_union:     bool,
+    pub has_distinct:  bool,
+    pub has_subquery:  bool,
+    pub has_final:     bool,
+    pub has_totals:    bool,
+    pub has_fill:      bool,
     #[serde(skip)]
-    complexity_cell:  OnceLock<QueryComplexity>
+    complexity_cell:   OnceLock<QueryComplexity>
 }
 
 impl Query {
@@ -78,6 +82,7 @@ impl Default for Query {
             tables:          Vec::new(),
             cte_names:       Vec::new(),
             where_cols:      ColumnVec::new(),
+            prewhere_cols:   ColumnVec::new(),
             join_cols:       ColumnVec::new(),
             order_cols:      ColumnVec::new(),
             group_cols:      ColumnVec::new(),
@@ -88,6 +93,9 @@ impl Default for Query {
             has_union:       false,
             has_distinct:    false,
             has_subquery:    false,
+            has_final:       false,
+            has_totals:      false,
+            has_fill:        false,
             complexity_cell: OnceLock::new()
         }
     }

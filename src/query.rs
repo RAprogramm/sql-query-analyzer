@@ -4,6 +4,7 @@ mod types;
 use extract::{ExtractionContext, extract_columns_from_expr, extract_from_set_expr};
 use indexmap::IndexSet;
 use rayon::prelude::*;
+use regex::Regex;
 use sqlparser::{
     dialect::{
         ClickHouseDialect, Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect
@@ -15,7 +16,7 @@ pub use types::{Query, QueryType};
 use crate::error::{AppResult, query_parse_error};
 
 /// SQL dialect for parsing
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SqlDialect {
     #[default]
@@ -48,8 +49,16 @@ pub fn parse_queries(sql: &str, dialect: SqlDialect) -> AppResult<Vec<Query>> {
     let parser_dialect = dialect.into_parser_dialect();
     let statements = Parser::parse_sql(parser_dialect.as_ref(), sql)
         .map_err(|e| query_parse_error(e.to_string()))?;
-    let queries: Result<Vec<_>, _> = statements.into_par_iter().map(parse_statement).collect();
-    queries
+    let mut queries: Vec<Query> = statements
+        .into_par_iter()
+        .map(parse_statement)
+        .collect::<AppResult<Vec<_>>>()?;
+    if dialect == SqlDialect::ClickHouse {
+        for q in &mut queries {
+            enrich_clickhouse_query(q);
+        }
+    }
+    Ok(queries)
 }
 
 fn parse_statement(stmt: sqlparser::ast::Statement) -> AppResult<Query> {
@@ -191,4 +200,30 @@ fn parse_select_query(raw: String, query: sqlparser::ast::Query) -> AppResult<Qu
     q.having_cols = having_cols.into_iter().collect();
     q.window_funcs = window_funcs;
     Ok(q)
+}
+
+/// Enrich a parsed query with ClickHouse-specific metadata extracted from raw
+/// SQL.
+fn enrich_clickhouse_query(q: &mut Query) {
+    let upper = q.raw.to_uppercase();
+    q.has_final = upper.contains(" FINAL");
+    q.has_totals = upper.contains("WITH TOTALS");
+    q.has_fill = upper.contains("WITH FILL");
+    if let Some(cap) = Regex::new(r"(?i)\bPREWHERE\s+([A-Za-z_][\w.]*)")
+        .ok()
+        .and_then(|re| re.captures(&q.raw))
+        && let Some(m) = cap.get(1)
+    {
+        q.prewhere_cols
+            .push(compact_str::CompactString::from(m.as_str()));
+    }
+    if let Some(cap) = Regex::new(r"(?i)\bSAMPLE\s+(\S+)")
+        .ok()
+        .and_then(|re| re.captures(&q.raw))
+        && let Some(m) = cap.get(1)
+    {
+        // store sample expression in raw? Query has no sample field; append to
+        // cte_names? Keep in where? Instead, store as a pseudo-column? We'll
+        // skip storing; rules can regex raw.
+    }
 }
