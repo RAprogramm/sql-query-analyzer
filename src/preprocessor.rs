@@ -51,6 +51,8 @@ pub struct PreprocessorMetadata {
     pub settings:        HashMap<String, String>,
     /// Partition expressions (ClickHouse PARTITION BY)
     pub partition_by:    Vec<String>,
+    /// Sample by expressions (ClickHouse SAMPLE BY)
+    pub sample_by:       Vec<String>,
     /// Data skipping indexes (ClickHouse INDEX ... TYPE ... GRANULARITY)
     pub skip_indexes:    Vec<SkipIndexInfo>
 }

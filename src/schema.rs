@@ -60,6 +60,8 @@ pub struct TableInfo {
     pub primary_key:  Option<Vec<String>>,
     /// Partitioning expression (ClickHouse PARTITION BY)
     pub partition_by: Option<String>,
+    /// Sample by expression (ClickHouse SAMPLE BY)
+    pub sample_by:    Option<String>,
     /// Data skipping indexes (ClickHouse INDEX ... TYPE ... GRANULARITY)
     pub skip_indexes: Vec<crate::preprocessor::SkipIndexInfo>,
     /// TTL expression (ClickHouse TTL)
@@ -176,6 +178,7 @@ impl Schema {
                 let partition_by = metadata.partition_by.first().cloned();
                 let ttl = metadata.ttl_expressions.first().cloned();
                 let settings = metadata.settings.clone();
+                let sample_by = metadata.sample_by.first().cloned();
                 let skip_indexes = metadata.skip_indexes.clone();
                 self.tables.insert(
                     table_name.clone(),
@@ -189,6 +192,7 @@ impl Schema {
                         partition_by,
                         ttl,
                         settings,
+                        sample_by,
                         skip_indexes,
                         cluster
                     }
@@ -251,6 +255,9 @@ impl Schema {
             }
             if let Some(partition_by) = &table.partition_by {
                 summary.push_str(&format!("Partition By: {}\n", partition_by));
+            }
+            if let Some(sample_by) = &table.sample_by {
+                summary.push_str(&format!("Sample By: {}\n", sample_by));
             }
             if let Some(ttl) = &table.ttl {
                 summary.push_str(&format!("TTL: {}\n", ttl));

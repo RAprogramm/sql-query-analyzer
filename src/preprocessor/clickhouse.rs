@@ -73,6 +73,11 @@ static PARTITION_BY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\bPARTITION\s+BY\s+(\S+(?:\([^)]*\))?)").expect("valid regex")
 });
 
+/// Regex for matching SAMPLE BY clauses (ClickHouse DDL).
+static SAMPLE_BY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?is)\bSAMPLE\s+BY\s+(.+?)(?:\s+SETTINGS\b|\s+TTL\b|;|$)").expect("valid regex")
+});
+
 /// Regex for individual setting key-value pairs.
 static SETTING_PAIR_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(\w+)\s*=\s*('[^']*'|\d+)").expect("valid regex"));
@@ -103,11 +108,13 @@ pub fn preprocess(sql: &str) -> PreprocessorResult {
     extract_ttl(&result, &mut metadata);
     extract_settings(&result, &mut metadata);
     extract_partition_by(&result, &mut metadata);
+    extract_sample_by(&result, &mut metadata);
     extract_skip_indexes(&result, &mut metadata);
     result = remove_codecs(&result);
     result = remove_ttl(&result);
     result = remove_settings(&result);
     result = remove_partition_by(&result);
+    result = remove_sample_by(&result);
     result = remove_skip_indexes(&result);
     result = normalize_whitespace(&result);
     PreprocessorResult {
@@ -162,6 +169,20 @@ fn extract_partition_by(sql: &str, metadata: &mut PreprocessorMetadata) {
             metadata.partition_by.push(expr.as_str().trim().to_string());
         }
     }
+}
+
+/// Extract SAMPLE BY expressions from SQL.
+fn extract_sample_by(sql: &str, metadata: &mut PreprocessorMetadata) {
+    for cap in SAMPLE_BY_REGEX.captures_iter(sql) {
+        if let Some(expr) = cap.get(1) {
+            metadata.sample_by.push(expr.as_str().trim().to_string());
+        }
+    }
+}
+
+/// Remove SAMPLE BY clauses from SQL.
+fn remove_sample_by(sql: &str) -> String {
+    SAMPLE_BY_REGEX.replace_all(sql, "").to_string()
 }
 
 /// Extract data skipping indexes from SQL.

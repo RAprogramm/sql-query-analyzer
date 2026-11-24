@@ -251,6 +251,7 @@ fn test_table_info_clickhouse_fields_default_none() {
     assert!(users.order_by.is_none());
     assert!(users.primary_key.is_none());
     assert!(users.partition_by.is_none());
+    assert!(users.sample_by.is_none());
     assert!(users.ttl.is_none());
     assert!(users.settings.is_empty());
     assert!(users.skip_indexes.is_empty());
