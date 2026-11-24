@@ -60,6 +60,12 @@ pub struct TableInfo {
     pub primary_key:  Option<Vec<String>>,
     /// Partitioning expression (ClickHouse PARTITION BY)
     pub partition_by: Option<String>,
+    /// Data skipping indexes (ClickHouse INDEX ... TYPE ... GRANULARITY)
+    pub skip_indexes: Vec<crate::preprocessor::SkipIndexInfo>,
+    /// TTL expression (ClickHouse TTL)
+    pub ttl:          Option<String>,
+    /// Table-level settings (ClickHouse SETTINGS)
+    pub settings:     std::collections::HashMap<String, String>,
     /// Cluster name (ClickHouse ON CLUSTER)
     pub cluster:      Option<String>
 }
@@ -167,6 +173,10 @@ impl Schema {
                 let order_by = create.order_by.as_ref().map(Self::extract_exprs);
                 let primary_key = create.primary_key.as_ref().map(|pk| vec![pk.to_string()]);
                 let cluster = create.on_cluster.map(|c| c.value);
+                let partition_by = metadata.partition_by.first().cloned();
+                let ttl = metadata.ttl_expressions.first().cloned();
+                let settings = metadata.settings.clone();
+                let skip_indexes = metadata.skip_indexes.clone();
                 self.tables.insert(
                     table_name.clone(),
                     TableInfo {
@@ -176,7 +186,10 @@ impl Schema {
                         engine,
                         order_by,
                         primary_key,
-                        partition_by: None,
+                        partition_by,
+                        ttl,
+                        settings,
+                        skip_indexes,
                         cluster
                     }
                 );
@@ -239,6 +252,17 @@ impl Schema {
             if let Some(partition_by) = &table.partition_by {
                 summary.push_str(&format!("Partition By: {}\n", partition_by));
             }
+            if let Some(ttl) = &table.ttl {
+                summary.push_str(&format!("TTL: {}\n", ttl));
+            }
+            if !table.settings.is_empty() {
+                let settings: Vec<String> = table
+                    .settings
+                    .iter()
+                    .map(|(k, v)| format!("{} = {}", k, v))
+                    .collect();
+                summary.push_str(&format!("Settings: {}\n", settings.join(", ")));
+            }
             if let Some(order_by) = &table.order_by {
                 summary.push_str(&format!("Order By: ({})\n", order_by.join(", ")));
             }
@@ -272,6 +296,24 @@ impl Schema {
                         unique = unique,
                         name = idx.name,
                         columns = idx.columns.join(", ")
+                    ));
+                }
+            }
+            if !table.skip_indexes.is_empty() {
+                summary.push_str("Skip Indexes:\n");
+                for si in &table.skip_indexes {
+                    let args = si
+                        .type_args
+                        .as_ref()
+                        .map(|a| format!("({})", a))
+                        .unwrap_or_default();
+                    summary.push_str(&format!(
+                        "  - INDEX {name} ON {expr} TYPE {ty}{args} GRANULARITY {g}\n",
+                        name = si.name,
+                        expr = si.expr,
+                        ty = si.type_name,
+                        args = args,
+                        g = si.granularity
                     ));
                 }
             }

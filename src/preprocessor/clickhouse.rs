@@ -30,6 +30,21 @@ use regex::Regex;
 
 use super::{PreprocessorMetadata, PreprocessorResult};
 
+/// Metadata for a ClickHouse data skipping index.
+#[derive(Debug, Clone)]
+pub struct SkipIndexInfo {
+    /// Index name
+    pub name:        String,
+    /// Indexed expression (column or expression)
+    pub expr:        String,
+    /// Index type (minmax, set, bloom_filter, ngrambf_v1, tokenbf_v1, text)
+    pub type_name:   String,
+    /// Optional type arguments (e.g. "100" for set, "0.01" for bloom_filter)
+    pub type_args:   Option<String>,
+    /// Granularity in granules
+    pub granularity: usize
+}
+
 /// Regex for matching CODEC clauses with optional nested parentheses.
 /// Matches: `CODEC(ZSTD)`, `CODEC(Delta, LZ4)`, `CODEC(ZSTD(3))`
 static CODEC_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -62,6 +77,22 @@ static PARTITION_BY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 static SETTING_PAIR_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(\w+)\s*=\s*('[^']*'|\d+)").expect("valid regex"));
 
+/// Regex for matching ClickHouse skipping index definitions.
+/// Matches: `INDEX name expr TYPE type(args) GRANULARITY n`
+static SKIP_INDEX_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?is)\bINDEX\s+(\w+)\s+(.+?)\s+TYPE\s+(\w+)(?:\s*\(([^)]*)\))?\s+GRANULARITY\s+(\d+)"
+    )
+    .expect("valid regex")
+});
+
+/// Regex for removing skipping index definitions (including optional leading
+/// comma).
+static SKIP_INDEX_REMOVE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?is),?\s*\bINDEX\s+\w+\s+.+?\s+TYPE\s+\w+(?:\s*\([^)]*\))?\s+GRANULARITY\s+\d+")
+        .expect("valid regex")
+});
+
 /// Preprocess ClickHouse SQL.
 ///
 /// Removes unsupported constructs and extracts metadata.
@@ -72,10 +103,12 @@ pub fn preprocess(sql: &str) -> PreprocessorResult {
     extract_ttl(&result, &mut metadata);
     extract_settings(&result, &mut metadata);
     extract_partition_by(&result, &mut metadata);
+    extract_skip_indexes(&result, &mut metadata);
     result = remove_codecs(&result);
     result = remove_ttl(&result);
     result = remove_settings(&result);
     result = remove_partition_by(&result);
+    result = remove_skip_indexes(&result);
     result = normalize_whitespace(&result);
     PreprocessorResult {
         sql: result,
@@ -129,6 +162,34 @@ fn extract_partition_by(sql: &str, metadata: &mut PreprocessorMetadata) {
             metadata.partition_by.push(expr.as_str().trim().to_string());
         }
     }
+}
+
+/// Extract data skipping indexes from SQL.
+fn extract_skip_indexes(sql: &str, metadata: &mut PreprocessorMetadata) {
+    for cap in SKIP_INDEX_REGEX.captures_iter(sql) {
+        let name = cap.get(1).map(|m| m.as_str().to_string());
+        let expr = cap.get(2).map(|m| m.as_str().trim().to_string());
+        let type_name = cap.get(3).map(|m| m.as_str().to_string());
+        let type_args = cap.get(4).map(|m| m.as_str().trim().to_string());
+        let granularity = cap
+            .get(5)
+            .and_then(|m| m.as_str().parse::<usize>().ok())
+            .unwrap_or(1);
+        if let (Some(n), Some(e), Some(t)) = (name, expr, type_name) {
+            metadata.skip_indexes.push(SkipIndexInfo {
+                name: n,
+                expr: e,
+                type_name: t,
+                type_args: type_args.filter(|s| !s.is_empty()),
+                granularity
+            });
+        }
+    }
+}
+
+/// Remove data skipping index definitions from SQL.
+fn remove_skip_indexes(sql: &str) -> String {
+    SKIP_INDEX_REMOVE_REGEX.replace_all(sql, "").to_string()
 }
 
 /// Remove CODEC clauses from SQL.

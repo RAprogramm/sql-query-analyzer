@@ -38,6 +38,8 @@ pub struct Preprocessor {
     dialect: SqlDialect
 }
 
+pub use crate::preprocessor::clickhouse::SkipIndexInfo;
+
 /// Metadata extracted during preprocessing.
 #[derive(Debug, Default, Clone)]
 pub struct PreprocessorMetadata {
@@ -48,7 +50,9 @@ pub struct PreprocessorMetadata {
     /// Table settings: setting_name -> value
     pub settings:        HashMap<String, String>,
     /// Partition expressions (ClickHouse PARTITION BY)
-    pub partition_by:    Vec<String>
+    pub partition_by:    Vec<String>,
+    /// Data skipping indexes (ClickHouse INDEX ... TYPE ... GRANULARITY)
+    pub skip_indexes:    Vec<SkipIndexInfo>
 }
 
 /// Result of SQL preprocessing.
