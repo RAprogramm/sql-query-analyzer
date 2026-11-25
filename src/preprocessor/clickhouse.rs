@@ -45,6 +45,26 @@ pub struct SkipIndexInfo {
     pub granularity: usize
 }
 
+/// Metadata for a ClickHouse projection.
+#[derive(Debug, Clone)]
+pub struct ProjectionInfo {
+    /// Projection name
+    pub name:  String,
+    /// Inner `SELECT` definition (without the surrounding parentheses)
+    pub query: String
+}
+
+/// Metadata for a ClickHouse materialized view.
+#[derive(Debug, Clone)]
+pub struct MaterializedViewInfo {
+    /// View name
+    pub name:   String,
+    /// Destination table (`TO target`), when present
+    pub target: Option<String>,
+    /// Source `SELECT` feeding the view
+    pub query:  String
+}
+
 /// Regex for matching CODEC clauses with optional nested parentheses.
 /// Matches: `CODEC(ZSTD)`, `CODEC(Delta, LZ4)`, `CODEC(ZSTD(3))`
 static CODEC_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -98,6 +118,37 @@ static SKIP_INDEX_REMOVE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
         .expect("valid regex")
 });
 
+/// Regex for matching a `CREATE DICTIONARY` header.
+/// Captures the dictionary name (group 1).
+static DICTIONARY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)\bCREATE\s+(?:OR\s+REPLACE\s+)?DICTIONARY\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w.]+)"
+    )
+    .expect("valid regex")
+});
+
+/// Regex for removing a whole `CREATE DICTIONARY` statement (up to `;` or end).
+static DICTIONARY_REMOVE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?is)\bCREATE\s+(?:OR\s+REPLACE\s+)?DICTIONARY\b[^;]*;?").expect("valid regex")
+});
+
+/// Regex for matching a `CREATE MATERIALIZED VIEW` header.
+/// Captures the view name (group 1) and optional `TO target` (group 2).
+static MATERIALIZED_VIEW_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)\bCREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w.]+)(?:\s+TO\s+([\w.]+))?"
+    )
+    .expect("valid regex")
+});
+
+/// Regex for stripping the ClickHouse engine clause between a materialized view
+/// header and its `AS SELECT` body, so the statement becomes parseable.
+/// Group 1 keeps the header, group 3 keeps the `AS SELECT` keyword.
+static MATERIALIZED_VIEW_ENGINE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?is)(\bCREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?[\w.]+(?:\s+TO\s+[\w.]+)?)(.*?)(\bAS\s+SELECT\b)")
+        .expect("valid regex")
+});
+
 /// Preprocess ClickHouse SQL.
 ///
 /// Removes unsupported constructs and extracts metadata.
@@ -110,12 +161,18 @@ pub fn preprocess(sql: &str) -> PreprocessorResult {
     extract_partition_by(&result, &mut metadata);
     extract_sample_by(&result, &mut metadata);
     extract_skip_indexes(&result, &mut metadata);
+    extract_projections(&result, &mut metadata);
+    extract_dictionaries(&result, &mut metadata);
+    extract_materialized_views(&result, &mut metadata);
     result = remove_codecs(&result);
     result = remove_ttl(&result);
     result = remove_settings(&result);
     result = remove_partition_by(&result);
     result = remove_sample_by(&result);
     result = remove_skip_indexes(&result);
+    result = remove_projections(&result);
+    result = remove_dictionaries(&result);
+    result = remove_materialized_view_engine(&result);
     result = normalize_whitespace(&result);
     PreprocessorResult {
         sql: result,
@@ -211,6 +268,207 @@ fn extract_skip_indexes(sql: &str, metadata: &mut PreprocessorMetadata) {
 /// Remove data skipping index definitions from SQL.
 fn remove_skip_indexes(sql: &str) -> String {
     SKIP_INDEX_REMOVE_REGEX.replace_all(sql, "").to_string()
+}
+
+/// Locate every `PROJECTION` definition and its byte span.
+///
+/// Supports both `PROJECTION name (SELECT ...)` and `PROJECTION name AS SELECT
+/// ...`. Parentheses and commas inside single-quoted strings are ignored when
+/// finding the definition boundary.
+fn find_projections(sql: &str) -> Vec<(usize, usize, ProjectionInfo)> {
+    let bytes = sql.as_bytes();
+    let upper = sql.to_uppercase();
+    let keyword = "PROJECTION";
+    let mut found = Vec::new();
+    let mut search = 0;
+    while let Some(rel) = upper[search..].find(keyword) {
+        let start = search + rel;
+        let after = start + keyword.len();
+        search = after;
+        let mut idx = after;
+        while idx < bytes.len() && (bytes[idx] as char).is_whitespace() {
+            idx += 1;
+        }
+        let name_start = idx;
+        while idx < bytes.len() && (bytes[idx] as char).is_alphanumeric()
+            || (idx < bytes.len() && bytes[idx] == b'_')
+        {
+            idx += 1;
+        }
+        if name_start == idx {
+            continue;
+        }
+        let name = sql[name_start..idx].to_string();
+        while idx < bytes.len() && (bytes[idx] as char).is_whitespace() {
+            idx += 1;
+        }
+        if idx >= bytes.len() {
+            continue;
+        }
+        if bytes[idx] == b'(' {
+            if let Some(end) = matching_paren(bytes, idx) {
+                let query = sql[idx + 1..end].trim().to_string();
+                found.push((
+                    start,
+                    end + 1,
+                    ProjectionInfo {
+                        name,
+                        query
+                    }
+                ));
+                search = end + 1;
+            }
+        } else if upper[idx..].starts_with("AS") {
+            let body_start = idx + 2;
+            if let Some(end) = projection_as_end(bytes, body_start) {
+                let query = sql[body_start..end].trim().to_string();
+                found.push((
+                    start,
+                    end,
+                    ProjectionInfo {
+                        name,
+                        query
+                    }
+                ));
+                search = end;
+            }
+        }
+    }
+    found
+}
+
+/// Return the byte index of the `)` matching the `(` at `open`.
+fn matching_paren(bytes: &[u8], open: usize) -> Option<usize> {
+    let mut depth = 0;
+    let mut in_str = false;
+    let mut i = open;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if in_str {
+            if c == b'\'' {
+                in_str = false;
+            }
+        } else {
+            match c {
+                b'\'' => in_str = true,
+                b'(' => depth += 1,
+                b')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(i);
+                    }
+                }
+                _ => {}
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Find the end of a `PROJECTION name AS SELECT ...` body: the first top-level
+/// comma or closing parenthesis outside of strings and nested parentheses.
+fn projection_as_end(bytes: &[u8], start: usize) -> Option<usize> {
+    let mut depth = 0;
+    let mut in_str = false;
+    let mut i = start;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if in_str {
+            if c == b'\'' {
+                in_str = false;
+            }
+        } else {
+            match c {
+                b'\'' => in_str = true,
+                b'(' => depth += 1,
+                b')' if depth == 0 => return Some(i),
+                b')' => depth -= 1,
+                b',' if depth == 0 => return Some(i),
+                _ => {}
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Extract projection definitions into metadata.
+fn extract_projections(sql: &str, metadata: &mut PreprocessorMetadata) {
+    for (_, _, projection) in find_projections(sql) {
+        metadata.projections.push(projection);
+    }
+}
+
+/// Remove projection definitions (and a leading comma) from SQL.
+fn remove_projections(sql: &str) -> String {
+    let mut spans: Vec<(usize, usize)> = find_projections(sql)
+        .into_iter()
+        .map(|(start, end, _)| (start, end))
+        .collect();
+    spans.sort_by_key(|(start, _)| *start);
+    let mut out = String::with_capacity(sql.len());
+    let mut cursor = 0;
+    for (start, end) in spans {
+        let mut cut_start = start;
+        let prefix = sql[cursor..start].trim_end();
+        if prefix.ends_with(',') {
+            cut_start = sql[..start].trim_end().len() - 1;
+        }
+        out.push_str(&sql[cursor..cut_start]);
+        cursor = end;
+    }
+    out.push_str(&sql[cursor..]);
+    out
+}
+
+/// Extract `CREATE DICTIONARY` names into metadata.
+fn extract_dictionaries(sql: &str, metadata: &mut PreprocessorMetadata) {
+    for cap in DICTIONARY_REGEX.captures_iter(sql) {
+        if let Some(name) = cap.get(1) {
+            metadata.dictionaries.push(name.as_str().to_string());
+        }
+    }
+}
+
+/// Remove whole `CREATE DICTIONARY` statements from SQL.
+fn remove_dictionaries(sql: &str) -> String {
+    DICTIONARY_REMOVE_REGEX.replace_all(sql, "").to_string()
+}
+
+/// Extract `CREATE MATERIALIZED VIEW` metadata into metadata.
+fn extract_materialized_views(sql: &str, metadata: &mut PreprocessorMetadata) {
+    for cap in MATERIALIZED_VIEW_REGEX.captures_iter(sql) {
+        let whole = cap.get(0).map(|m| m.end()).unwrap_or(0);
+        let name = cap
+            .get(1)
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_default();
+        let target = cap.get(2).map(|m| m.as_str().to_string());
+        let query = sql[whole..]
+            .split(';')
+            .next()
+            .and_then(|seg| {
+                let upper = seg.to_uppercase();
+                upper.find("SELECT").map(|i| seg[i..].trim().to_string())
+            })
+            .unwrap_or_default();
+        metadata.materialized_views.push(MaterializedViewInfo {
+            name,
+            target,
+            query
+        });
+    }
+}
+
+/// Strip the engine clause between a materialized view header and its body so
+/// the statement parses with `sqlparser`.
+fn remove_materialized_view_engine(sql: &str) -> String {
+    MATERIALIZED_VIEW_ENGINE_REGEX
+        .replace_all(sql, |caps: &regex::Captures| {
+            format!("{} {}", &caps[1], &caps[3])
+        })
+        .to_string()
 }
 
 /// Remove CODEC clauses from SQL.
@@ -359,6 +617,50 @@ mod tests {
         assert!(!result.sql.contains("SAMPLE"));
         assert!(!result.sql.contains("index_granularity"));
         assert_eq!(result.metadata.sample_by.len(), 1);
+    }
+
+    #[test]
+    fn test_projection_extraction() {
+        let sql = "CREATE TABLE t (a UInt64, b String, PROJECTION p (SELECT a, sum(b) ORDER BY a)) \
+                   ENGINE = MergeTree ORDER BY a";
+        let result = preprocess(sql);
+        assert!(!result.sql.contains("PROJECTION"));
+        assert_eq!(result.metadata.projections.len(), 1);
+        assert_eq!(result.metadata.projections[0].name, "p");
+        assert!(result.metadata.projections[0].query.contains("sum(b)"));
+    }
+
+    #[test]
+    fn test_projection_as_select_form() {
+        let sql = "CREATE TABLE t (a UInt64, PROJECTION p AS SELECT a ORDER BY a) \
+                   ENGINE = MergeTree ORDER BY a";
+        let result = preprocess(sql);
+        assert!(!result.sql.contains("PROJECTION"));
+        assert_eq!(result.metadata.projections.len(), 1);
+    }
+
+    #[test]
+    fn test_dictionary_removal() {
+        let sql = "CREATE DICTIONARY d (id UInt64) PRIMARY KEY id SOURCE(NULL()) LAYOUT(FLAT()); \
+                   CREATE TABLE x (id UInt64) ENGINE = MergeTree ORDER BY id";
+        let result = preprocess(sql);
+        assert!(!result.sql.contains("DICTIONARY"));
+        assert_eq!(result.metadata.dictionaries, vec!["d".to_string()]);
+        assert!(result.sql.contains("CREATE TABLE x"));
+    }
+
+    #[test]
+    fn test_materialized_view_engine_strip() {
+        let sql = "CREATE MATERIALIZED VIEW mv TO dest ENGINE = MergeTree ORDER BY a \
+                   AS SELECT a FROM src";
+        let result = preprocess(sql);
+        assert!(!result.sql.contains("ENGINE"));
+        assert!(result.sql.contains("AS SELECT a FROM src"));
+        assert_eq!(result.metadata.materialized_views.len(), 1);
+        let mv = &result.metadata.materialized_views[0];
+        assert_eq!(mv.name, "mv");
+        assert_eq!(mv.target.as_deref(), Some("dest"));
+        assert!(mv.query.contains("SELECT a FROM src"));
     }
 
     #[test]

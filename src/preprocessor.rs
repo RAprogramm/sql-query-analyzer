@@ -38,23 +38,29 @@ pub struct Preprocessor {
     dialect: SqlDialect
 }
 
-pub use crate::preprocessor::clickhouse::SkipIndexInfo;
+pub use crate::preprocessor::clickhouse::{MaterializedViewInfo, ProjectionInfo, SkipIndexInfo};
 
 /// Metadata extracted during preprocessing.
 #[derive(Debug, Default, Clone)]
 pub struct PreprocessorMetadata {
     /// Column codecs: column_name -> codec_expression
-    pub codecs:          HashMap<String, String>,
+    pub codecs:             HashMap<String, String>,
     /// TTL expressions extracted from table definitions
-    pub ttl_expressions: Vec<String>,
+    pub ttl_expressions:    Vec<String>,
     /// Table settings: setting_name -> value
-    pub settings:        HashMap<String, String>,
+    pub settings:           HashMap<String, String>,
     /// Partition expressions (ClickHouse PARTITION BY)
-    pub partition_by:    Vec<String>,
+    pub partition_by:       Vec<String>,
     /// Sample by expressions (ClickHouse SAMPLE BY)
-    pub sample_by:       Vec<String>,
+    pub sample_by:          Vec<String>,
     /// Data skipping indexes (ClickHouse INDEX ... TYPE ... GRANULARITY)
-    pub skip_indexes:    Vec<SkipIndexInfo>
+    pub skip_indexes:       Vec<SkipIndexInfo>,
+    /// Projections (ClickHouse PROJECTION ... AS SELECT)
+    pub projections:        Vec<ProjectionInfo>,
+    /// Dictionary names (ClickHouse CREATE DICTIONARY)
+    pub dictionaries:       Vec<String>,
+    /// Materialized views (ClickHouse CREATE MATERIALIZED VIEW)
+    pub materialized_views: Vec<MaterializedViewInfo>
 }
 
 /// Result of SQL preprocessing.

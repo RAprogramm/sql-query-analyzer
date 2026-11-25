@@ -64,6 +64,8 @@ pub struct TableInfo {
     pub sample_by:    Option<String>,
     /// Data skipping indexes (ClickHouse INDEX ... TYPE ... GRANULARITY)
     pub skip_indexes: Vec<crate::preprocessor::SkipIndexInfo>,
+    /// Projections (ClickHouse PROJECTION ... AS SELECT)
+    pub projections:  Vec<crate::preprocessor::ProjectionInfo>,
     /// TTL expression (ClickHouse TTL)
     pub ttl:          Option<String>,
     /// Table-level settings (ClickHouse SETTINGS)
@@ -104,7 +106,11 @@ pub struct IndexInfo {
 #[derive(Debug, Default, Clone)]
 pub struct Schema {
     /// Map of table name to table information
-    pub tables: BTreeMap<String, TableInfo>
+    pub tables:             BTreeMap<String, TableInfo>,
+    /// ClickHouse dictionary names defined in the schema
+    pub dictionaries:       Vec<String>,
+    /// ClickHouse materialized views defined in the schema
+    pub materialized_views: Vec<crate::preprocessor::MaterializedViewInfo>
 }
 
 impl Schema {
@@ -132,6 +138,8 @@ impl Schema {
         for stmt in statements {
             schema.process_statement(stmt, &preprocessed.metadata, dialect)?;
         }
+        schema.dictionaries = preprocessed.metadata.dictionaries.clone();
+        schema.materialized_views = preprocessed.metadata.materialized_views.clone();
         Ok(schema)
     }
 
@@ -191,6 +199,7 @@ impl Schema {
                 let settings = metadata.settings.clone();
                 let sample_by = metadata.sample_by.first().cloned();
                 let skip_indexes = metadata.skip_indexes.clone();
+                let projections = metadata.projections.clone();
                 self.tables.insert(
                     table_name.clone(),
                     TableInfo {
@@ -205,6 +214,7 @@ impl Schema {
                         settings,
                         sample_by,
                         skip_indexes,
+                        projections,
                         cluster
                     }
                 );
@@ -335,7 +345,31 @@ impl Schema {
                     ));
                 }
             }
+            if !table.projections.is_empty() {
+                summary.push_str("Projections:\n");
+                for proj in &table.projections {
+                    summary.push_str(&format!("  - {} AS {}\n", proj.name, proj.query));
+                }
+            }
             summary.push('\n');
+        }
+        if !self.dictionaries.is_empty() {
+            summary.push_str(&format!("Dictionaries: {}\n", self.dictionaries.join(", ")));
+        }
+        if !self.materialized_views.is_empty() {
+            summary.push_str("Materialized Views:\n");
+            for mv in &self.materialized_views {
+                let target = mv
+                    .target
+                    .as_ref()
+                    .map(|t| format!(" TO {t}"))
+                    .unwrap_or_default();
+                summary.push_str(&format!(
+                    "  - {name}{target} AS {query}\n",
+                    name = mv.name,
+                    query = mv.query
+                ));
+            }
         }
         summary
     }

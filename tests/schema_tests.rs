@@ -259,6 +259,27 @@ fn test_table_info_clickhouse_fields_default_none() {
 }
 
 #[test]
+fn test_clickhouse_projection_no_phantom_column() {
+    let sql = "CREATE TABLE t (a UInt64, b String, PROJECTION p (SELECT a ORDER BY a)) ENGINE = MergeTree ORDER BY a";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    let t = &schema.tables["t"];
+    assert_eq!(t.columns.len(), 2);
+    assert_eq!(t.projections.len(), 1);
+    assert_eq!(t.projections[0].name, "p");
+}
+
+#[test]
+fn test_clickhouse_dictionary_and_view() {
+    let sql = "CREATE DICTIONARY d (id UInt64) PRIMARY KEY id SOURCE(NULL()) LAYOUT(FLAT()); \
+               CREATE MATERIALIZED VIEW mv TO dest ENGINE = MergeTree ORDER BY a AS SELECT a FROM src; \
+               CREATE TABLE dest (a UInt64) ENGINE = MergeTree ORDER BY a";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    assert_eq!(schema.dictionaries, vec!["d".to_string()]);
+    assert_eq!(schema.materialized_views.len(), 1);
+    assert!(schema.tables.contains_key("dest"));
+}
+
+#[test]
 fn test_clickhouse_nullable_only_for_nullable_type() {
     let sql = "CREATE TABLE t (a UInt64, b Nullable(String)) ENGINE = MergeTree ORDER BY a";
     let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
