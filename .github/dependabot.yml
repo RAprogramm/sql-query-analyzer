@@ -10,6 +10,8 @@ updates:
     commit-message:
       prefix: "deps"
     open-pull-requests-limit: 10
+    cooldown:
+      default-days: 7
     groups:
       rust-dependencies:
         patterns:
@@ -25,6 +27,8 @@ updates:
     commit-message:
       prefix: "ci"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     groups:
       github-actions:
         patterns:
