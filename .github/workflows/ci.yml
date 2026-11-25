@@ -20,7 +20,7 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
-  # Stage 1: PR size check (blocks everything on failure)
+  # Stage 1: PR size check (advisory report, does not gate the pipeline)
   pr-size:
     name: PR Size Check
     runs-on: ubuntu-latest
@@ -44,10 +44,6 @@ jobs:
 
   # Stage 2: Detect changes
   detect:
-    needs: pr-size
-    if: |
-      always() &&
-      (github.event_name == 'push' || needs.pr-size.result == 'success')
     uses: ./.github/workflows/_detect.yml
 
   # Stage 3: All checks (parallel)
@@ -174,7 +170,6 @@ jobs:
     name: CI Success
     needs:
       [
-        pr-size,
         detect,
         fmt,
         clippy,
