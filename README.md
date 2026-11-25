@@ -7,6 +7,7 @@
 [![Docs.rs](https://docs.rs/sql_query_analyzer/badge.svg)](https://docs.rs/sql_query_analyzer)
 [![CI](https://github.com/RAprogramm/sql-query-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/RAprogramm/sql-query-analyzer/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/RAprogramm/sql-query-analyzer/graph/badge.svg?token=hKvq66JThf)](https://codecov.io/gh/RAprogramm/sql-query-analyzer)
+[![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/RAprogramm/sql-query-analyzer?utm_source=badge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Hits-of-Code](https://hitsofcode.com/github/RAprogramm/sql-query-analyzer?branch=main&exclude=Cargo.lock,.gitignore,CHANGELOG.md)](https://hitsofcode.com/github/RAprogramm/sql-query-analyzer/view?branch=main&exclude=Cargo.lock,.gitignore,CHANGELOG.md)
 [![REUSE status](https://api.reuse.software/badge/github.com/RAprogramm/sql-query-analyzer)](https://api.reuse.software/info/github.com/RAprogramm/sql-query-analyzer)
@@ -776,6 +777,19 @@ All jobs utilize `Swatinem/rust-cache@v2` with job-specific cache keys:
 - **Memory-efficient** string storage with CompactString
 
 Typical performance: ~1000 queries analyzed in <100ms (static analysis only).
+
+### Benchmarks
+
+The benchmarks in [`benches/analyzer.rs`](benches/analyzer.rs) cover query and schema parsing, ClickHouse preprocessing, rule execution, report formatting and the full static pipeline. [CodSpeed](https://app.codspeed.io/RAprogramm/sql-query-analyzer) runs them on every pull request and on `main` and reports performance changes. To run them locally:
+
+```bash
+cargo bench --bench analyzer
+
+# With the CodSpeed CLI (https://codspeed.io/docs/cli)
+cargo install cargo-codspeed --locked
+cargo codspeed build -m simulation
+codspeed run -m simulation -- cargo codspeed run
+```
 
 <div align="right"><a href="#table-of-contents">↑ Back to top</a></div>
 
