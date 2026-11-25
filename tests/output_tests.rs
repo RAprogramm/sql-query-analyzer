@@ -737,3 +737,47 @@ fn test_analysis_report_counts() {
     assert_eq!(report.warning_count(), 1);
     assert_eq!(report.info_count(), 3);
 }
+
+#[test]
+fn test_yaml_top_level_scalars_and_empty_containers() {
+    use sql_query_analyzer::output::yaml::to_string;
+    assert_eq!(to_string(&serde_json::json!("plain")).unwrap(), "plain\n");
+    assert_eq!(to_string(&serde_json::json!([])).unwrap(), "[]\n");
+    assert_eq!(to_string(&serde_json::json!({})).unwrap(), "{}\n");
+    assert_eq!(to_string(&serde_json::json!(null)).unwrap(), "null\n");
+}
+
+#[test]
+fn test_yaml_nested_empty_containers() {
+    use sql_query_analyzer::output::yaml::to_string;
+    let out = to_string(&serde_json::json!({"list": [], "map": {}})).unwrap();
+    assert!(out.contains("list: []"), "{out}");
+    assert!(out.contains("map: {}"), "{out}");
+    let nested = to_string(&serde_json::json!([[], {"a": 1}])).unwrap();
+    assert!(nested.contains("- []"), "{nested}");
+}
+
+#[test]
+fn test_yaml_quotes_ambiguous_keys() {
+    use sql_query_analyzer::output::yaml::to_string;
+    let out = to_string(&serde_json::json!({"true": 1, "42": 2, "a: b": 3})).unwrap();
+    assert!(out.contains("\"true\": 1"), "{out}");
+    assert!(out.contains("\"42\": 2"), "{out}");
+    assert!(out.contains("\"a: b\": 3"), "{out}");
+}
+
+#[test]
+fn test_yaml_escapes_special_string_values() {
+    use sql_query_analyzer::output::yaml::to_string;
+    let out = to_string(&serde_json::json!({
+        "quote": "say \"hi\"",
+        "back": "a\\b",
+        "line": "a\nb",
+        "ctrl": "a\u{7}b"
+    }))
+    .unwrap();
+    assert!(out.contains("\"say \\\"hi\\\"\""), "{out}");
+    assert!(out.contains("back: a\\b"), "{out}");
+    assert!(out.contains("\"a\\nb\""), "{out}");
+    assert!(out.contains("\"a\\u0007b\""), "{out}");
+}

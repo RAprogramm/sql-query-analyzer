@@ -3,7 +3,7 @@ use std::fmt::Write;
 use colored::Colorize;
 use serde::Serialize;
 
-mod yaml;
+pub mod yaml;
 
 use crate::{
     query::Query,

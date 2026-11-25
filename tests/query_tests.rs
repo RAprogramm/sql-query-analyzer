@@ -516,3 +516,42 @@ fn test_left_join_extracts_join_cols() {
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert!(!queries[0].join_cols.is_empty());
 }
+
+#[test]
+fn test_case_expressions_and_compound_identifiers() {
+    let sql = "SELECT x FROM t WHERE t.a = 1 \
+               AND CASE t.a WHEN 1 THEN t.b ELSE t.c END > 0 \
+               AND CASE WHEN t.d > 0 THEN 1 ELSE 0 END = 1";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    let cols = &queries[0].where_cols;
+    for expected in ["a", "b", "c", "d"] {
+        assert!(
+            cols.iter().any(|c| c.as_str() == expected),
+            "column {expected} missing: {cols:?}"
+        );
+    }
+}
+
+#[test]
+fn test_window_function_with_compound_partition_and_order() {
+    let sql = "SELECT sum(t.a) OVER (PARTITION BY t.b ORDER BY t.c) FROM t";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    let wf = &queries[0].window_funcs[0];
+    assert!(
+        wf.partition_cols.iter().any(|c| c.as_str() == "b"),
+        "{wf:?}"
+    );
+    assert!(wf.order_cols.iter().any(|c| c.as_str() == "c"), "{wf:?}");
+}
+
+#[test]
+fn test_window_functions_in_nested_binary_and_case() {
+    let sql = "SELECT (count(*) OVER ()) + 1, \
+               CASE WHEN sum(a) OVER () > 0 THEN 1 ELSE min(b) OVER () END FROM t";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert!(
+        queries[0].window_funcs.len() >= 3,
+        "expected windows in binary, nested and case branches: {:?}",
+        queries[0].window_funcs
+    );
+}

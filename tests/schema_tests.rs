@@ -411,3 +411,86 @@ fn test_mysql_inline_key_constraint() {
     assert_eq!(orders.indexes.len(), 1);
     assert_eq!(orders.indexes[0].name, "idx_user");
 }
+
+#[test]
+fn test_to_summary_includes_all_clickhouse_metadata() {
+    let sql = "CREATE TABLE t (\
+        a UInt64 CODEC(ZSTD), \
+        b Nullable(String), \
+        INDEX idx_b b TYPE minmax GRANULARITY 1, \
+        INDEX idx_a a TYPE bloom_filter(0.01) GRANULARITY 2, \
+        PROJECTION p (SELECT b ORDER BY b)\
+    ) ENGINE = MergeTree \
+      PARTITION BY toYYYYMM(a) \
+      PRIMARY KEY a \
+      SAMPLE BY a \
+      TTL a + INTERVAL 1 DAY \
+      SETTINGS index_granularity = 8192";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    let summary = schema.to_summary();
+    assert!(summary.contains("Partition By: toYYYYMM(a)"));
+    assert!(summary.contains("Sample By: a"));
+    assert!(summary.contains("TTL:"));
+    assert!(summary.contains("Settings: index_granularity = 8192"));
+    assert!(summary.contains("Skip Indexes:"));
+    assert!(summary.contains("INDEX idx_b ON b TYPE minmax GRANULARITY 1"));
+    assert!(summary.contains("INDEX idx_a ON a TYPE bloom_filter(0.01) GRANULARITY 2"));
+    assert!(summary.contains("Projections:"));
+    assert!(summary.contains("p AS SELECT b ORDER BY b"));
+    assert!(summary.contains("CODEC(ZSTD)"));
+}
+
+#[test]
+fn test_to_summary_includes_dictionaries_and_views() {
+    let sql = "CREATE DICTIONARY d (id UInt64) PRIMARY KEY id SOURCE(NULL()) LAYOUT(FLAT()); \
+               CREATE MATERIALIZED VIEW mv TO dest ENGINE = MergeTree ORDER BY a AS SELECT a FROM src; \
+               CREATE TABLE dest (a UInt64) ENGINE = MergeTree ORDER BY a";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    let summary = schema.to_summary();
+    assert!(summary.contains("Dictionaries: d"));
+    assert!(summary.contains("Materialized Views:"));
+    assert!(summary.contains("mv TO dest"));
+}
+
+#[test]
+fn test_create_index_statement_marks_unique() {
+    let sql = "CREATE TABLE users (id INT PRIMARY KEY, email VARCHAR(255)); \
+               CREATE UNIQUE INDEX idx_email ON users (email); \
+               CREATE INDEX idx_id ON users (id)";
+    let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
+    let users = &schema.tables["users"];
+    assert_eq!(users.indexes.len(), 2);
+    let unique = users
+        .indexes
+        .iter()
+        .find(|i| i.name == "idx_email")
+        .expect("unique index present");
+    assert!(unique.is_unique);
+    assert_eq!(unique.columns, vec!["email".to_string()]);
+    let plain = users
+        .indexes
+        .iter()
+        .find(|i| i.name == "idx_id")
+        .expect("plain index present");
+    assert!(!plain.is_unique);
+}
+
+#[test]
+fn test_create_index_on_unknown_table_is_ignored() {
+    let sql = "CREATE INDEX idx_x ON missing (a)";
+    let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
+    assert!(schema.tables.is_empty());
+}
+
+#[test]
+fn test_inline_index_constraint_parsed() {
+    let sql =
+        "CREATE TABLE users (id INT PRIMARY KEY, email VARCHAR(255), INDEX idx_email (email))";
+    let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
+    let users = &schema.tables["users"];
+    assert!(
+        users.indexes.iter().any(|i| i.name == "idx_email"),
+        "inline INDEX constraint should be recorded: {:?}",
+        users.indexes
+    );
+}

@@ -636,4 +636,135 @@ mod tests {
             .unwrap_err();
         assert!(err.to_string().contains("429"));
     }
+
+    #[test]
+    fn new_uses_default_retry_config() {
+        let client = LlmClient::new(LlmProvider::Ollama {
+            base_url: "http://127.0.0.1:1".into(),
+            model:    "m".into()
+        });
+        assert_eq!(client.retry_config.max_retries, 3);
+    }
+
+    #[tokio::test]
+    async fn openai_success_returns_message_content() {
+        let base = mock_server(
+            "200 OK",
+            r#"{"choices":[{"message":{"content":"openai answer"}}]}"#
+        )
+        .await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::OpenAI {
+                api_key:  "sk-test".into(),
+                model:    "gpt-4".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let out = client
+            .analyze("schema", "queries", SqlDialect::Generic)
+            .await
+            .unwrap();
+        assert_eq!(out, "openai answer");
+    }
+
+    #[tokio::test]
+    async fn openai_empty_choices_is_error() {
+        let base = mock_server("200 OK", r#"{"choices":[]}"#).await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::OpenAI {
+                api_key:  "sk-test".into(),
+                model:    "gpt-4".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let err = client
+            .analyze("s", "q", SqlDialect::Generic)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("Empty response from OpenAI"));
+    }
+
+    #[tokio::test]
+    async fn anthropic_success_returns_text() {
+        let base = mock_server("200 OK", r#"{"content":[{"text":"claude answer"}]}"#).await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Anthropic {
+                api_key:  "sk-ant".into(),
+                model:    "claude-3".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let out = client
+            .analyze("schema", "queries", SqlDialect::PostgreSQL)
+            .await
+            .unwrap();
+        assert_eq!(out, "claude answer");
+    }
+
+    #[tokio::test]
+    async fn anthropic_empty_content_is_error() {
+        let base = mock_server("200 OK", r#"{"content":[]}"#).await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Anthropic {
+                api_key:  "sk-ant".into(),
+                model:    "claude-3".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let err = client
+            .analyze("s", "q", SqlDialect::Generic)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("Empty response from Anthropic"));
+    }
+
+    /// Start a mock HTTP server answering successive connections in order.
+    async fn mock_server_seq(responses: &[(&'static str, &'static str)]) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let responses = responses.to_vec();
+        tokio::spawn(async move {
+            for (status, body) in responses {
+                let Ok((mut sock, _)) = listener.accept().await else {
+                    continue;
+                };
+                let mut buf = [0u8; 8192];
+                let _ = sock.read(&mut buf).await;
+                let resp = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = sock.write_all(resp.as_bytes()).await;
+                let _ = sock.shutdown().await;
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    #[tokio::test]
+    async fn retry_recovers_after_transient_server_error() {
+        let base = mock_server_seq(&[
+            ("500 Internal Server Error", "boom"),
+            ("200 OK", r#"{"response":"recovered"}"#)
+        ])
+        .await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Ollama {
+                base_url: base,
+                model:    "m".into()
+            },
+            RetryConfig {
+                max_retries:      1,
+                initial_delay_ms: 1,
+                max_delay_ms:     2,
+                backoff_factor:   2
+            }
+        );
+        let out = client.analyze("s", "q", SqlDialect::Generic).await.unwrap();
+        assert_eq!(out, "recovered");
+    }
 }

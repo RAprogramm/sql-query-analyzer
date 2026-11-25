@@ -236,3 +236,99 @@ fn ch025_ok_for_low_cardinality() {
     let v = ch_ids("SELECT s, count() FROM t GROUP BY s", schema);
     assert!(!v.contains(&"CH025".to_string()));
 }
+
+fn ch_preprocess(sql: &str) -> sql_query_analyzer::preprocessor::PreprocessorResult {
+    sql_query_analyzer::preprocessor::Preprocessor::new(SqlDialect::ClickHouse).process(sql)
+}
+
+#[test]
+fn test_projection_without_name_is_ignored() {
+    let result = ch_preprocess("CREATE TABLE t (a UInt64, PROJECTION (SELECT a))");
+    assert!(result.metadata.projections.is_empty());
+}
+
+#[test]
+fn test_projection_at_end_of_input_is_ignored() {
+    let result = ch_preprocess("CREATE TABLE t (a UInt64) PROJECTION p");
+    assert!(result.metadata.projections.is_empty());
+}
+
+#[test]
+fn test_projection_unclosed_paren_is_ignored() {
+    let result = ch_preprocess("CREATE TABLE t (a UInt64, PROJECTION p (SELECT a");
+    assert!(result.metadata.projections.is_empty());
+}
+
+#[test]
+fn test_projection_as_unclosed_is_ignored() {
+    let result = ch_preprocess("CREATE TABLE t (a UInt64) PROJECTION p AS SELECT a");
+    assert!(result.metadata.projections.is_empty());
+}
+
+#[test]
+fn test_projection_paren_with_string_containing_paren() {
+    let result = ch_preprocess("CREATE TABLE t (a UInt64, PROJECTION p (SELECT '(' ))");
+    assert_eq!(result.metadata.projections.len(), 1);
+    assert_eq!(result.metadata.projections[0].name, "p");
+    assert!(result.metadata.projections[0].query.contains('('));
+}
+
+#[test]
+fn test_projection_as_with_string_containing_comma() {
+    let result =
+        ch_preprocess("CREATE TABLE t (a UInt64, PROJECTION p AS SELECT 'x,y', b UInt64)");
+    assert_eq!(result.metadata.projections.len(), 1);
+    assert!(result.metadata.projections[0].query.contains("'x,y'"));
+}
+
+#[test]
+fn test_projection_removal_drops_leading_comma() {
+    let result = ch_preprocess("CREATE TABLE t (a UInt64, PROJECTION p AS SELECT a)");
+    assert!(!result.sql.contains("PROJECTION"));
+    assert!(!result.sql.contains(", )"));
+}
+
+#[test]
+fn test_skip_index_granularity_overflow_falls_back_to_one() {
+    let result = ch_preprocess(
+        "CREATE TABLE t (a UInt64, INDEX i a TYPE minmax GRANULARITY 99999999999999999999999)"
+    );
+    assert_eq!(result.metadata.skip_indexes.len(), 1);
+    assert_eq!(result.metadata.skip_indexes[0].granularity, 1);
+}
+
+#[test]
+fn test_schema_aware_rules_ignore_unknown_tables() {
+    let schema_sql = "CREATE TABLE known (a UInt64) ENGINE = MergeTree ORDER BY a";
+    let ids = ch_ids(
+        "SELECT * FROM missing JOIN known USING (a) WHERE a = 1 GROUP BY a HAVING count() > 1",
+        schema_sql
+    );
+    assert!(
+        !ids.contains(&"CH002".to_string()),
+        "unknown table must not produce violations: {ids:?}"
+    );
+}
+
+#[test]
+fn test_primary_key_rules_skip_tables_without_sort_key() {
+    let schema_sql = "CREATE TABLE nokey (a UInt64) ENGINE = MergeTree";
+    let ids = ch_ids(
+        "SELECT a FROM nokey WHERE a = 1 GROUP BY a ORDER BY a",
+        schema_sql
+    );
+    assert!(
+        !ids.contains(&"CH002".to_string()) && !ids.contains(&"CH011".to_string()),
+        "table without ORDER BY must be skipped: {ids:?}"
+    );
+}
+
+#[test]
+fn test_group_by_string_key_ignores_unknown_columns() {
+    let schema_sql = "CREATE TABLE t (a UInt64) ENGINE = MergeTree ORDER BY a";
+    let ids = ch_ids("SELECT b FROM t GROUP BY b", schema_sql);
+    assert!(
+        !ids.contains(&"CH019".to_string()),
+        "group column absent from table must be skipped: {ids:?}"
+    );
+}

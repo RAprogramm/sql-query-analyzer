@@ -161,3 +161,61 @@ fn test_config_load_with_env_vars() {
         remove_var("OLLAMA_URL");
     }
 }
+
+fn with_home<T>(home: &std::path::Path, f: impl FnOnce() -> T) -> T {
+    let saved = std::env::var_os("HOME");
+    unsafe { set_var("HOME", home) };
+    let result = f();
+    unsafe {
+        match saved {
+            Some(v) => set_var("HOME", v),
+            None => remove_var("HOME")
+        }
+    }
+    result
+}
+
+#[test]
+fn test_load_home_config_file() {
+    let home = tempfile::tempdir().unwrap();
+    let dir = home.path().join(".config").join("sql-analyzer");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("config.toml"),
+        "[llm]\nprovider = \"home-provider\"\nmodel = \"home-model\"\n"
+    )
+    .unwrap();
+    let config = with_home(home.path(), Config::load).unwrap();
+    assert_eq!(config.llm.provider, Some("home-provider".to_string()));
+    assert_eq!(config.llm.model, Some("home-model".to_string()));
+}
+
+#[test]
+fn test_load_invalid_home_config_errors() {
+    let home = tempfile::tempdir().unwrap();
+    let dir = home.path().join(".config").join("sql-analyzer");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("config.toml"), "not = [valid toml").unwrap();
+    let err = with_home(home.path(), Config::load).unwrap_err();
+    assert!(err.to_string().contains("Invalid config file"));
+}
+
+#[test]
+fn test_load_local_config_file_valid_and_invalid() {
+    let dir = tempfile::tempdir().unwrap();
+    let local = dir.path().join(".sql-analyzer.toml");
+    std::fs::write(&local, "[rules]\ndisabled = [\"STYLE001\"]\n").unwrap();
+    let saved = std::env::current_dir().unwrap();
+    std::env::set_current_dir(dir.path()).unwrap();
+    let valid = Config::load();
+    std::fs::write(&local, "broken [").unwrap();
+    let invalid = Config::load();
+    let _ = std::env::set_current_dir(saved);
+    assert_eq!(valid.unwrap().rules.disabled, vec!["STYLE001".to_string()]);
+    assert!(
+        invalid
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid config file")
+    );
+}
