@@ -36,6 +36,7 @@ jobs:
             rust:
               - 'src/**'
               - 'tests/**'
+              - 'benches/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - '.rustfmt.toml'
