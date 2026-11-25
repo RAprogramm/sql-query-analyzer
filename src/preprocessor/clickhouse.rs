@@ -61,7 +61,7 @@ static COLUMN_CODEC_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 /// Regex for matching TTL clauses.
 /// Matches: `TTL expr + INTERVAL n UNIT` up to SETTINGS or end
 static TTL_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)\bTTL\s+(.+?)(?:\s+SETTINGS\b|;|$)").expect("valid regex"));
+    LazyLock::new(|| Regex::new(r"(?i)\bTTL\s+(.+?)(\s+SETTINGS\b|;|$)").expect("valid regex"));
 
 /// Regex for matching SETTINGS clauses.
 /// Matches: `SETTINGS key = value, key2 = value2`
@@ -75,7 +75,7 @@ static PARTITION_BY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 
 /// Regex for matching SAMPLE BY clauses (ClickHouse DDL).
 static SAMPLE_BY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?is)\bSAMPLE\s+BY\s+(.+?)(?:\s+SETTINGS\b|\s+TTL\b|;|$)").expect("valid regex")
+    Regex::new(r"(?is)\bSAMPLE\s+BY\s+(.+?)(\s+SETTINGS\b|\s+TTL\b|;|$)").expect("valid regex")
 });
 
 /// Regex for individual setting key-value pairs.
@@ -182,7 +182,7 @@ fn extract_sample_by(sql: &str, metadata: &mut PreprocessorMetadata) {
 
 /// Remove SAMPLE BY clauses from SQL.
 fn remove_sample_by(sql: &str) -> String {
-    SAMPLE_BY_REGEX.replace_all(sql, "").to_string()
+    SAMPLE_BY_REGEX.replace_all(sql, "${2}").to_string()
 }
 
 /// Extract data skipping indexes from SQL.
@@ -220,7 +220,7 @@ fn remove_codecs(sql: &str) -> String {
 
 /// Remove TTL clauses from SQL.
 fn remove_ttl(sql: &str) -> String {
-    TTL_REGEX.replace_all(sql, "").to_string()
+    TTL_REGEX.replace_all(sql, "${2}").to_string()
 }
 
 /// Remove SETTINGS clauses from SQL.

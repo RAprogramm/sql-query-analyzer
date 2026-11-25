@@ -130,7 +130,7 @@ impl Schema {
             .map_err(|e| schema_parse_error(e.to_string()))?;
         let mut schema = Self::default();
         for stmt in statements {
-            schema.process_statement(stmt, &preprocessed.metadata)?;
+            schema.process_statement(stmt, &preprocessed.metadata, dialect)?;
         }
         Ok(schema)
     }
@@ -138,7 +138,8 @@ impl Schema {
     fn process_statement(
         &mut self,
         stmt: sqlparser::ast::Statement,
-        metadata: &PreprocessorMetadata
+        metadata: &PreprocessorMetadata,
+        dialect: SqlDialect
     ) -> AppResult<()> {
         use sqlparser::ast::Statement;
         match stmt {
@@ -152,12 +153,22 @@ impl Schema {
                         matches!(opt.option, sqlparser::ast::ColumnOption::PrimaryKey(_))
                     });
                     let codec = metadata.codecs.get(&col_name).cloned();
+                    let data_type = column.data_type.to_string();
+                    let is_nullable = if dialect == SqlDialect::ClickHouse {
+                        data_type
+                            .trim_start()
+                            .to_uppercase()
+                            .starts_with("NULLABLE")
+                    } else {
+                        !column
+                            .options
+                            .iter()
+                            .any(|opt| matches!(opt.option, sqlparser::ast::ColumnOption::NotNull))
+                    };
                     columns.push(ColumnInfo {
                         name: col_name,
-                        data_type: column.data_type.to_string(),
-                        is_nullable: !column.options.iter().any(|opt| {
-                            matches!(opt.option, sqlparser::ast::ColumnOption::NotNull)
-                        }),
+                        data_type,
+                        is_nullable,
                         is_primary,
                         codec
                     });
