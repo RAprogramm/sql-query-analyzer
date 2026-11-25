@@ -159,6 +159,27 @@ struct OllamaResponse {
     response: String
 }
 
+/// Build the analysis prompt for a dialect, embedding schema and query
+/// summaries.
+fn build_prompt(schema_summary: &str, queries_summary: &str, dialect: SqlDialect) -> String {
+    let guidance = match dialect {
+        SqlDialect::ClickHouse => CLICKHOUSE_PROMPT,
+        _ => GENERIC_PROMPT
+    };
+    format!(
+        "{guidance}\n\n{schema}\n\n{queries}\n\n\
+         For each query, identify:\n\
+         1. Whether the existing schema design is used effectively\n\
+         2. Missing schema features that would improve performance\n\
+         3. Full scans or inefficient operations\n\
+         4. Suggestions for query optimization\n\
+         Provide specific, actionable recommendations.",
+        guidance = guidance,
+        schema = schema_summary,
+        queries = queries_summary
+    )
+}
+
 impl LlmClient {
     /// Create new LLM client with default retry configuration
     #[allow(dead_code)]
@@ -186,22 +207,7 @@ impl LlmClient {
         queries_summary: &str,
         dialect: SqlDialect
     ) -> AppResult<String> {
-        let guidance = match dialect {
-            SqlDialect::ClickHouse => CLICKHOUSE_PROMPT,
-            _ => GENERIC_PROMPT
-        };
-        let prompt = format!(
-            "{guidance}\n\n{schema}\n\n{queries}\n\n\
-             For each query, identify:\n\
-             1. Whether the existing schema design is used effectively\n\
-             2. Missing schema features that would improve performance\n\
-             3. Full scans or inefficient operations\n\
-             4. Suggestions for query optimization\n\
-             Provide specific, actionable recommendations.",
-            guidance = guidance,
-            schema = schema_summary,
-            queries = queries_summary
-        );
+        let prompt = build_prompt(schema_summary, queries_summary, dialect);
         self.call_with_retry(&prompt).await
     }
 
@@ -353,5 +359,131 @@ impl LlmClient {
         }
         let result: OllamaResponse = response.json().await.map_err(http_error)?;
         Ok(result.response)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener
+    };
+
+    use super::*;
+
+    fn no_retry() -> RetryConfig {
+        RetryConfig {
+            max_retries:      0,
+            initial_delay_ms: 1,
+            max_delay_ms:     1,
+            backoff_factor:   1.0
+        }
+    }
+
+    /// Start a one-shot mock HTTP server returning `status` and `body`.
+    async fn mock_server(status: &'static str, body: &'static str) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            if let Ok((mut sock, _)) = listener.accept().await {
+                let mut buf = [0u8; 8192];
+                let _ = sock.read(&mut buf).await;
+                let resp = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = sock.write_all(resp.as_bytes()).await;
+                let _ = sock.shutdown().await;
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    #[test]
+    fn build_prompt_clickhouse_has_columnar_guidance() {
+        let p = build_prompt("schema", "queries", SqlDialect::ClickHouse);
+        assert!(p.contains("ClickHouse"));
+        assert!(p.contains("schema"));
+        assert!(p.contains("queries"));
+    }
+
+    #[test]
+    fn build_prompt_generic_uses_oltp_guidance() {
+        let p = build_prompt("s", "q", SqlDialect::Generic);
+        assert!(p.contains("index"));
+        assert!(!p.contains("columnar"));
+    }
+
+    #[test]
+    fn retryable_error_detection() {
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Ollama {
+                base_url: "http://x".into(),
+                model:    "m".into()
+            },
+            no_retry()
+        );
+        assert!(client.is_retryable_error(&llm_api_error("connection refused")));
+        assert!(client.is_retryable_error(&llm_api_error("HTTP 429 rate limit")));
+        assert!(client.is_retryable_error(&llm_api_error("server 503")));
+        assert!(!client.is_retryable_error(&llm_api_error("bad request 400")));
+    }
+
+    #[test]
+    fn response_structs_parse() {
+        let o: OllamaResponse = serde_json::from_str(r#"{"response":"hi"}"#).unwrap();
+        assert_eq!(o.response, "hi");
+        let a: OpenAIResponse =
+            serde_json::from_str(r#"{"choices":[{"message":{"content":"yo"}}]}"#).unwrap();
+        assert_eq!(a.choices[0].message.content, "yo");
+        let an: AnthropicResponse =
+            serde_json::from_str(r#"{"content":[{"text":"hey"}]}"#).unwrap();
+        assert_eq!(an.content[0].text, "hey");
+    }
+
+    #[tokio::test]
+    async fn ollama_success_returns_text() {
+        let base = mock_server("200 OK", r#"{"response":"analysis result"}"#).await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Ollama {
+                base_url: base,
+                model:    "m".into()
+            },
+            no_retry()
+        );
+        let out = client
+            .analyze("schema", "queries", SqlDialect::ClickHouse)
+            .await
+            .unwrap();
+        assert_eq!(out, "analysis result");
+    }
+
+    #[tokio::test]
+    async fn ollama_error_status_is_returned() {
+        let base = mock_server("500 Internal Server Error", "boom").await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Ollama {
+                base_url: base,
+                model:    "m".into()
+            },
+            no_retry()
+        );
+        let err = client
+            .analyze("s", "q", SqlDialect::Generic)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("500"));
+    }
+
+    #[tokio::test]
+    async fn connection_failure_is_reported() {
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Ollama {
+                base_url: "http://127.0.0.1:1".into(),
+                model:    "m".into()
+            },
+            no_retry()
+        );
+        assert!(client.analyze("s", "q", SqlDialect::Generic).await.is_err());
     }
 }

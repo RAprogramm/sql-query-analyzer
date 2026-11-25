@@ -235,4 +235,34 @@ mod tests {
         let v: Value = serde_json::json!(["x", "y"]);
         assert_eq!(yaml(&v), "- x\n- y\n");
     }
+
+    #[test]
+    fn top_level_array_of_objects() {
+        let v: Value = serde_json::json!([{"a": 1}, {"a": 2}]);
+        assert_eq!(yaml(&v), "- a: 1\n- a: 2\n");
+    }
+
+    #[test]
+    fn nested_array_in_array() {
+        let v: Value = serde_json::json!([[1, 2], [3]]);
+        assert!(yaml(&v).contains("- - 1"));
+    }
+
+    #[test]
+    fn quotes_special_keys() {
+        let mut map = serde_json::Map::new();
+        map.insert("a: b".into(), Value::from(1));
+        assert!(yaml(&Value::Object(map)).contains("\"a: b\": 1"));
+    }
+
+    #[test]
+    fn escapes_control_characters() {
+        let v: Value = serde_json::json!({"s": "a\tb"});
+        assert!(yaml(&v).contains("s: \"a\\tb\""));
+    }
+
+    #[test]
+    fn top_level_scalar() {
+        assert_eq!(yaml(&Value::from(7)), "7\n");
+    }
 }
