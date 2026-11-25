@@ -181,17 +181,16 @@ pub fn rewrite_mutations(sql: &str) -> String {
 #[must_use]
 pub fn preprocess(sql: &str) -> PreprocessorResult {
     let mut metadata = PreprocessorMetadata::default();
-    let mut result = sql.to_string();
-    extract_codecs(&result, &mut metadata);
-    extract_ttl(&result, &mut metadata);
-    extract_settings(&result, &mut metadata);
-    extract_partition_by(&result, &mut metadata);
-    extract_sample_by(&result, &mut metadata);
-    extract_skip_indexes(&result, &mut metadata);
-    extract_projections(&result, &mut metadata);
-    extract_dictionaries(&result, &mut metadata);
-    extract_materialized_views(&result, &mut metadata);
-    result = remove_codecs(&result);
+    extract_codecs(sql, &mut metadata);
+    extract_ttl(sql, &mut metadata);
+    extract_settings(sql, &mut metadata);
+    extract_partition_by(sql, &mut metadata);
+    extract_sample_by(sql, &mut metadata);
+    extract_skip_indexes(sql, &mut metadata);
+    extract_projections(sql, &mut metadata);
+    extract_dictionaries(sql, &mut metadata);
+    extract_materialized_views(sql, &mut metadata);
+    let mut result = remove_codecs(sql);
     result = remove_ttl(&result);
     result = remove_settings(&result);
     result = remove_partition_by(&result);
@@ -266,7 +265,7 @@ fn extract_sample_by(sql: &str, metadata: &mut PreprocessorMetadata) {
 
 /// Remove SAMPLE BY clauses from SQL.
 fn remove_sample_by(sql: &str) -> String {
-    SAMPLE_BY_REGEX.replace_all(sql, "${2}").to_string()
+    SAMPLE_BY_REGEX.replace_all(sql, "${2}").into_owned()
 }
 
 /// Extract data skipping indexes from SQL.
@@ -294,7 +293,7 @@ fn extract_skip_indexes(sql: &str, metadata: &mut PreprocessorMetadata) {
 
 /// Remove data skipping index definitions from SQL.
 fn remove_skip_indexes(sql: &str) -> String {
-    SKIP_INDEX_REMOVE_REGEX.replace_all(sql, "").to_string()
+    SKIP_INDEX_REMOVE_REGEX.replace_all(sql, "").into_owned()
 }
 
 /// Locate every `PROJECTION` definition and its byte span.
@@ -304,12 +303,10 @@ fn remove_skip_indexes(sql: &str) -> String {
 /// finding the definition boundary.
 fn find_projections(sql: &str) -> Vec<(usize, usize, ProjectionInfo)> {
     let bytes = sql.as_bytes();
-    let upper = sql.to_uppercase();
-    let keyword = "PROJECTION";
+    let keyword = b"PROJECTION";
     let mut found = Vec::new();
     let mut search = 0;
-    while let Some(rel) = upper[search..].find(keyword) {
-        let start = search + rel;
+    while let Some(start) = find_keyword_ignore_case(bytes, keyword, search) {
         let after = start + keyword.len();
         search = after;
         let mut idx = after;
@@ -345,7 +342,10 @@ fn find_projections(sql: &str) -> Vec<(usize, usize, ProjectionInfo)> {
                 ));
                 search = end + 1;
             }
-        } else if upper[idx..].starts_with("AS") {
+        } else if bytes
+            .get(idx..idx + 2)
+            .is_some_and(|two| two.eq_ignore_ascii_case(b"AS"))
+        {
             let body_start = idx + 2;
             if let Some(end) = projection_as_end(bytes, body_start) {
                 let query = sql[body_start..end].trim().to_string();
@@ -459,7 +459,7 @@ fn extract_dictionaries(sql: &str, metadata: &mut PreprocessorMetadata) {
 
 /// Remove whole `CREATE DICTIONARY` statements from SQL.
 fn remove_dictionaries(sql: &str) -> String {
-    DICTIONARY_REMOVE_REGEX.replace_all(sql, "").to_string()
+    DICTIONARY_REMOVE_REGEX.replace_all(sql, "").into_owned()
 }
 
 /// Extract `CREATE MATERIALIZED VIEW` metadata into metadata.
@@ -472,8 +472,8 @@ fn extract_materialized_views(sql: &str, metadata: &mut PreprocessorMetadata) {
             .split(';')
             .next()
             .and_then(|seg| {
-                let upper = seg.to_uppercase();
-                upper.find("SELECT").map(|i| seg[i..].trim().to_string())
+                find_keyword_ignore_case(seg.as_bytes(), b"SELECT", 0)
+                    .map(|i| seg[i..].trim().to_string())
             })
             .unwrap_or_default();
         metadata.materialized_views.push(MaterializedViewInfo {
@@ -496,28 +496,44 @@ fn remove_materialized_view_engine(sql: &str) -> String {
 
 /// Remove CODEC clauses from SQL.
 fn remove_codecs(sql: &str) -> String {
-    CODEC_REGEX.replace_all(sql, "").to_string()
+    CODEC_REGEX.replace_all(sql, "").into_owned()
 }
 
 /// Remove TTL clauses from SQL.
 fn remove_ttl(sql: &str) -> String {
-    TTL_REGEX.replace_all(sql, "${2}").to_string()
+    TTL_REGEX.replace_all(sql, "${2}").into_owned()
 }
 
 /// Remove SETTINGS clauses from SQL.
 fn remove_settings(sql: &str) -> String {
-    SETTINGS_REGEX.replace_all(sql, "").to_string()
+    SETTINGS_REGEX.replace_all(sql, "").into_owned()
 }
 
 /// Remove PARTITION BY clauses from SQL.
 fn remove_partition_by(sql: &str) -> String {
-    PARTITION_BY_REGEX.replace_all(sql, "").to_string()
+    PARTITION_BY_REGEX.replace_all(sql, "").into_owned()
 }
+
+/// Regex for collapsing whitespace runs.
+static WHITESPACE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\s+").expect("valid regex"));
 
 /// Normalize excessive whitespace.
 fn normalize_whitespace(sql: &str) -> String {
-    let re = Regex::new(r"\s+").expect("valid regex");
-    re.replace_all(sql.trim(), " ").to_string()
+    WHITESPACE_REGEX.replace_all(sql.trim(), " ").into_owned()
+}
+
+/// Find an ASCII case-insensitive `needle` in `haystack` at or after `from`.
+fn find_keyword_ignore_case(haystack: &[u8], needle: &[u8], from: usize) -> Option<usize> {
+    if needle.is_empty() || haystack.len() < from + needle.len() {
+        return None;
+    }
+    (from..=haystack.len() - needle.len()).find(|&i| {
+        haystack[i..i + needle.len()]
+            .iter()
+            .zip(needle)
+            .all(|(h, n)| h.eq_ignore_ascii_case(n))
+    })
 }
 
 #[cfg(test)]
