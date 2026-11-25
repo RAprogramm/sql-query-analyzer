@@ -217,13 +217,4 @@ fn enrich_clickhouse_query(q: &mut Query) {
         q.prewhere_cols
             .push(compact_str::CompactString::from(m.as_str()));
     }
-    if let Some(cap) = Regex::new(r"(?i)\bSAMPLE\s+(\S+)")
-        .ok()
-        .and_then(|re| re.captures(&q.raw))
-        && let Some(m) = cap.get(1)
-    {
-        // store sample expression in raw? Query has no sample field; append to
-        // cte_names? Keep in where? Instead, store as a pseudo-column? We'll
-        // skip storing; rules can regex raw.
-    }
 }
