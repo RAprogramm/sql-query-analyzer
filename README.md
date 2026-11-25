@@ -474,7 +474,7 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql
 
 ## ClickHouse Support
 
-The analyzer includes a preprocessor that handles ClickHouse-specific DDL constructs not supported by the underlying SQL parser:
+The analyzer includes a preprocessor that handles ClickHouse-specific DDL constructs not supported by the underlying SQL parser, plus a dedicated set of ClickHouse best-practice rules that activate only with `--dialect clickhouse`.
 
 ### Supported Constructs
 
@@ -484,6 +484,29 @@ The analyzer includes a preprocessor that handles ClickHouse-specific DDL constr
 | `TTL` | `TTL event_date + INTERVAL 90 DAY` | Data expiration rules |
 | `SETTINGS` | `SETTINGS index_granularity = 8192` | Table-level settings |
 | `PARTITION BY` | `PARTITION BY toYYYYMM(date)` | Partitioning expressions |
+| `SAMPLE BY` | `SAMPLE BY intHash32(id)` | Sampling key |
+| Skipping index | `INDEX idx col TYPE minmax GRANULARITY 4` | Data skipping indexes |
+| Query clauses | `PREWHERE`, `FINAL`, `WITH TOTALS`, `WITH FILL` | ClickHouse query modifiers |
+
+### ClickHouse Rules
+
+When the ClickHouse dialect is selected, the OLTP index-suggestion rules are replaced by ClickHouse-aware rules that reason about the sparse primary key, partition pruning, and columnar storage:
+
+| Rule | Severity | Description |
+|------|----------|-------------|
+| `CH001` | Info | `SELECT *` reads every column file |
+| `CH002` | Warning | WHERE does not use the sort key prefix |
+| `CH003` | Warning | WHERE does not match `PARTITION BY` |
+| `CH004` | Warning | Function on a date column disables the index |
+| `CH005` | Info | Filter column has no sort key or skipping index |
+| `CH006` | Info | `LowCardinality` on a likely high-cardinality column |
+| `CH007` | Info | `Nullable` column used in a hot filter path |
+| `CH009` | Info | `uniqExact` where approximate `uniq` suffices |
+| `CH010` | Info | Multiple count subqueries replaceable by `countIf` |
+| `CH011` | Warning | `ORDER BY` in a subquery without `LIMIT` |
+| `CH012` | Info | `GROUP BY` prefix differs from the sort key |
+| `CH016` | Info | Multi-table JOIN (prefer dictionary/denormalization) |
+| `CH019` | Warning | `FINAL` forces read-time deduplication |
 
 ### Example
 

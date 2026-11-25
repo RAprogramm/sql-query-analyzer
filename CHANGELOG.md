@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- ClickHouse dialect overhaul: store `PARTITION BY`, `TTL`, `SETTINGS`, `SAMPLE BY`, and data skipping indexes in the schema model; extract `PREWHERE`/`FINAL`/`WITH TOTALS`/`WITH FILL` from queries
+- Dialect-aware `RuleRunner` and 13 ClickHouse best-practice rules (`CH001`-`CH012`, `CH016`, `CH019`) that replace the OLTP index-suggestion rules for ClickHouse
+- ClickHouse-specific LLM prompt guidance
 - Add PERF017 rule detecting correlated subqueries ([#110](https://github.com/RAprogramm/sql-query-analyzer/issues/110)) ([b0e47bc](https://github.com/RAprogramm/sql-query-analyzer/commit/b0e47bceb5357302d5001e14e6ba59a72a648957))
 
 ### Documentation

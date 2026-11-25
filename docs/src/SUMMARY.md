@@ -22,6 +22,7 @@ SPDX-License-Identifier: MIT
 - [Style](rules/style.md)
 - [Security](rules/security.md)
 - [Schema-Aware](rules/schema.md)
+- [ClickHouse](rules/clickhouse.md)
 
 # Integrations
 
