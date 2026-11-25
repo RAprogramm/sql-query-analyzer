@@ -5,6 +5,8 @@
 //! `libyaml`-backed crates while covering the data shapes the analyzer emits:
 //! maps, sequences, strings, numbers, booleans, and null.
 
+use std::fmt::Write;
+
 use serde::Serialize;
 use serde_json::Value;
 
@@ -32,8 +34,12 @@ pub fn to_string<T: Serialize>(value: &T) -> Result<String, serde_json::Error> {
 fn emit_scalar(value: &Value, out: &mut String) {
     match value {
         Value::Null => out.push_str("null\n"),
-        Value::Bool(b) => out.push_str(&format!("{b}\n")),
-        Value::Number(n) => out.push_str(&format!("{n}\n")),
+        Value::Bool(b) => {
+            let _ = writeln!(out, "{b}");
+        }
+        Value::Number(n) => {
+            let _ = writeln!(out, "{n}");
+        }
         Value::String(s) => {
             out.push_str(&format_scalar(s));
             out.push('\n');
@@ -132,7 +138,7 @@ fn is_plain_safe(s: &str) -> bool {
     if s.is_empty() {
         return false;
     }
-    if s.chars().any(|c| c.is_control()) {
+    if s.chars().any(char::is_control) {
         return false;
     }
     if s.starts_with([' ', '-']) || s.ends_with(' ') {
@@ -168,7 +174,9 @@ fn quote(s: &str) -> String {
             '\n' => out.push_str("\\n"),
             '\r' => out.push_str("\\r"),
             '\t' => out.push_str("\\t"),
-            c if c.is_control() => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c if c.is_control() => {
+                let _ = write!(out, "\\u{:04x}", c as u32);
+            }
             c => out.push(c)
         }
     }

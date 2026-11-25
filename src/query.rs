@@ -29,6 +29,7 @@ pub enum SqlDialect {
 
 impl SqlDialect {
     /// Convert to sqlparser dialect for parsing
+    #[must_use]
     pub fn into_parser_dialect(self) -> Box<dyn Dialect> {
         match self {
             Self::Generic => Box::new(GenericDialect {}),
@@ -45,6 +46,11 @@ impl SqlDialect {
 /// # Notes
 ///
 /// - Parses statements in parallel for better performance
+///
+/// # Errors
+///
+/// Returns [`crate::AppError`] if the SQL cannot be parsed by the underlying
+/// parser for the selected dialect.
 pub fn parse_queries(sql: &str, dialect: SqlDialect) -> AppResult<Vec<Query>> {
     let parser_dialect = dialect.into_parser_dialect();
     let sql = if dialect == SqlDialect::ClickHouse {
@@ -54,10 +60,7 @@ pub fn parse_queries(sql: &str, dialect: SqlDialect) -> AppResult<Vec<Query>> {
     };
     let statements = Parser::parse_sql(parser_dialect.as_ref(), sql.as_ref())
         .map_err(|e| query_parse_error(e.to_string()))?;
-    let mut queries: Vec<Query> = statements
-        .into_par_iter()
-        .map(parse_statement)
-        .collect::<AppResult<Vec<_>>>()?;
+    let mut queries: Vec<Query> = statements.into_par_iter().map(parse_statement).collect();
     if dialect == SqlDialect::ClickHouse {
         for q in &mut queries {
             enrich_clickhouse_query(q);
@@ -66,15 +69,15 @@ pub fn parse_queries(sql: &str, dialect: SqlDialect) -> AppResult<Vec<Query>> {
     Ok(queries)
 }
 
-fn parse_statement(stmt: sqlparser::ast::Statement) -> AppResult<Query> {
+fn parse_statement(stmt: sqlparser::ast::Statement) -> Query {
     use sqlparser::ast::Statement;
     let raw = stmt.to_string();
     match stmt {
-        Statement::Query(query) => parse_select_query(raw, *query),
+        Statement::Query(query) => parse_select_query(raw, &query),
         Statement::Insert(insert) => {
             let mut q = Query::new(raw, QueryType::Insert);
             q.tables.push(insert.table.to_string().into());
-            Ok(q)
+            q
         }
         Statement::Update(update) => {
             let mut q = Query::new(raw, QueryType::Update);
@@ -84,7 +87,7 @@ fn parse_statement(stmt: sqlparser::ast::Statement) -> AppResult<Query> {
                 extract_columns_from_expr(&sel, &mut cols);
                 q.where_cols = cols.into_iter().collect();
             }
-            Ok(q)
+            q
         }
         Statement::Delete(delete) => {
             let mut q = Query::new(raw, QueryType::Delete);
@@ -98,14 +101,14 @@ fn parse_statement(stmt: sqlparser::ast::Statement) -> AppResult<Query> {
                     q.tables.push(item.relation.to_string().into());
                 }
             }
-            Ok(q)
+            q
         }
         Statement::Truncate(truncate) => {
             let mut q = Query::new(raw, QueryType::Truncate);
             for table in truncate.table_names {
                 q.tables.push(table.name.to_string().into());
             }
-            Ok(q)
+            q
         }
         Statement::Drop {
             names,
@@ -117,14 +120,14 @@ fn parse_statement(stmt: sqlparser::ast::Statement) -> AppResult<Query> {
                 q.tables.push(name.to_string().into());
             }
             q.cte_names
-                .push(format!("{:?}", object_type).to_lowercase().into());
-            Ok(q)
+                .push(format!("{object_type:?}").to_lowercase().into());
+            q
         }
-        _ => Ok(Query::new(raw, QueryType::Other))
+        _ => Query::new(raw, QueryType::Other)
     }
 }
 
-fn parse_select_query(raw: String, query: sqlparser::ast::Query) -> AppResult<Query> {
+fn parse_select_query(raw: String, query: &sqlparser::ast::Query) -> Query {
     let mut q = Query::new(raw, QueryType::Select);
     for cte in &query
         .with
@@ -204,16 +207,16 @@ fn parse_select_query(raw: String, query: sqlparser::ast::Query) -> AppResult<Qu
     q.group_cols = group_cols.into_iter().collect();
     q.having_cols = having_cols.into_iter().collect();
     q.window_funcs = window_funcs;
-    Ok(q)
+    q
 }
 
 /// Enrich a parsed query with ClickHouse-specific metadata extracted from raw
 /// SQL.
 fn enrich_clickhouse_query(q: &mut Query) {
     let upper = q.raw.to_uppercase();
-    q.has_final = upper.contains(" FINAL");
-    q.has_totals = upper.contains("WITH TOTALS");
-    q.has_fill = upper.contains("WITH FILL");
+    q.clickhouse.has_final = upper.contains(" FINAL");
+    q.clickhouse.has_totals = upper.contains("WITH TOTALS");
+    q.clickhouse.has_fill = upper.contains("WITH FILL");
     if let Some(cap) = Regex::new(r"(?i)\bPREWHERE\s+([A-Za-z_][\w.]*)")
         .ok()
         .and_then(|re| re.captures(&q.raw))

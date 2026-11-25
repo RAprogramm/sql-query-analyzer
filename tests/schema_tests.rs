@@ -17,10 +17,10 @@ fn test_parse_simple_table() {
 
 #[test]
 fn test_parse_multiple_tables() {
-    let sql = r#"
+    let sql = r"
         CREATE TABLE users (id INT PRIMARY KEY);
         CREATE TABLE orders (id INT PRIMARY KEY, user_id INT);
-    "#;
+    ";
     let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
     assert_eq!(schema.tables.len(), 2);
     assert!(schema.tables.contains_key("users"));
@@ -38,10 +38,10 @@ fn test_parse_not_null() {
 
 #[test]
 fn test_parse_index() {
-    let sql = r#"
+    let sql = r"
         CREATE TABLE users (id INT PRIMARY KEY, email VARCHAR(255));
         CREATE INDEX idx_email ON users(email);
-    "#;
+    ";
     let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
     let users = &schema.tables["users"];
     assert_eq!(users.indexes.len(), 1);
@@ -50,10 +50,10 @@ fn test_parse_index() {
 
 #[test]
 fn test_parse_unique_index() {
-    let sql = r#"
+    let sql = r"
         CREATE TABLE users (id INT PRIMARY KEY, email VARCHAR(255));
         CREATE UNIQUE INDEX idx_email ON users(email);
-    "#;
+    ";
     let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
     let users = &schema.tables["users"];
     assert!(users.indexes[0].is_unique);
@@ -61,10 +61,10 @@ fn test_parse_unique_index() {
 
 #[test]
 fn test_parse_composite_index() {
-    let sql = r#"
+    let sql = r"
         CREATE TABLE orders (id INT, user_id INT, created_at TIMESTAMP);
         CREATE INDEX idx_user_created ON orders(user_id, created_at);
-    "#;
+    ";
     let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
     let orders = &schema.tables["orders"];
     assert_eq!(orders.indexes[0].columns.len(), 2);
@@ -84,7 +84,7 @@ fn test_to_summary() {
 
 #[test]
 fn test_parse_various_types() {
-    let sql = r#"
+    let sql = r"
         CREATE TABLE test (
             id BIGINT,
             price DECIMAL(10,2),
@@ -92,7 +92,7 @@ fn test_parse_various_types() {
             data TEXT,
             created_at TIMESTAMP
         )
-    "#;
+    ";
     let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
     let test = &schema.tables["test"];
     assert_eq!(test.columns.len(), 5);
@@ -116,7 +116,7 @@ fn test_empty_schema() {
 fn test_schema_debug() {
     let sql = "CREATE TABLE users (id INT PRIMARY KEY)";
     let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
-    let debug = format!("{:?}", schema);
+    let debug = format!("{schema:?}");
     assert!(debug.contains("Schema"));
 }
 
@@ -136,10 +136,10 @@ fn test_schema_default() {
 
 #[test]
 fn test_parse_insert_statement() {
-    let sql = r#"
+    let sql = r"
         CREATE TABLE users (id INT PRIMARY KEY);
         INSERT INTO users VALUES (1);
-    "#;
+    ";
     let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
     assert_eq!(schema.tables.len(), 1);
 }
@@ -154,10 +154,10 @@ fn test_parse_with_default_value() {
 
 #[test]
 fn test_schema_to_summary_with_index() {
-    let sql = r#"
+    let sql = r"
         CREATE TABLE users (id INT PRIMARY KEY, email VARCHAR(255));
         CREATE INDEX idx_email ON users(email);
-    "#;
+    ";
     let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
     let summary = schema.to_summary();
     assert!(summary.contains("idx_email"));
@@ -166,10 +166,10 @@ fn test_schema_to_summary_with_index() {
 
 #[test]
 fn test_schema_to_summary_with_unique_index() {
-    let sql = r#"
+    let sql = r"
         CREATE TABLE users (id INT PRIMARY KEY, email VARCHAR(255));
         CREATE UNIQUE INDEX idx_email ON users(email);
-    "#;
+    ";
     let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
     let summary = schema.to_summary();
     assert!(summary.contains("UNIQUE"));
@@ -196,7 +196,7 @@ fn test_table_info_debug() {
     let sql = "CREATE TABLE users (id INT PRIMARY KEY)";
     let schema = Schema::parse(sql, SqlDialect::Generic).unwrap();
     let users = &schema.tables["users"];
-    let debug = format!("{:?}", users);
+    let debug = format!("{users:?}");
     assert!(debug.contains("TableInfo"));
 }
 
@@ -210,7 +210,7 @@ fn test_column_info_debug() {
         is_primary:  false,
         codec:       None
     };
-    let debug = format!("{:?}", col);
+    let debug = format!("{col:?}");
     assert!(debug.contains("test"));
 }
 
@@ -230,7 +230,7 @@ fn test_index_info_debug() {
         columns:   vec!["col1".to_string()],
         is_unique: false
     };
-    let debug = format!("{:?}", idx);
+    let debug = format!("{idx:?}");
     assert!(debug.contains("idx_test"));
 }
 
@@ -382,13 +382,13 @@ fn test_table_options_with() {
 
 #[test]
 fn test_mysql_inline_index_constraint() {
-    let sql = r#"
+    let sql = r"
         CREATE TABLE users (
             id INT PRIMARY KEY,
             email VARCHAR(255),
             INDEX idx_email (email)
         )
-    "#;
+    ";
     let schema = Schema::parse(sql, SqlDialect::MySQL).unwrap();
     let users = &schema.tables["users"];
     assert_eq!(users.indexes.len(), 1);
@@ -399,13 +399,13 @@ fn test_mysql_inline_index_constraint() {
 
 #[test]
 fn test_mysql_inline_key_constraint() {
-    let sql = r#"
+    let sql = r"
         CREATE TABLE orders (
             id INT PRIMARY KEY,
             user_id INT,
             KEY idx_user (user_id)
         )
-    "#;
+    ";
     let schema = Schema::parse(sql, SqlDialect::MySQL).unwrap();
     let orders = &schema.tables["orders"];
     assert_eq!(orders.indexes.len(), 1);

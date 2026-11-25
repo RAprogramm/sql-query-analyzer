@@ -6,19 +6,19 @@ use sql_query_analyzer::rules::{AnalysisReport, RuleCategory, RuleInfo, Severity
 #[test]
 fn test_severity_display_info() {
     let s = Severity::Info;
-    assert_eq!(format!("{}", s), "INFO");
+    assert_eq!(format!("{s}"), "INFO");
 }
 
 #[test]
 fn test_severity_display_warning() {
     let s = Severity::Warning;
-    assert_eq!(format!("{}", s), "WARN");
+    assert_eq!(format!("{s}"), "WARN");
 }
 
 #[test]
 fn test_severity_display_error() {
     let s = Severity::Error;
-    assert_eq!(format!("{}", s), "ERROR");
+    assert_eq!(format!("{s}"), "ERROR");
 }
 
 #[test]
@@ -44,26 +44,26 @@ fn test_severity_copy() {
 #[test]
 fn test_severity_debug() {
     let s = Severity::Warning;
-    let debug = format!("{:?}", s);
+    let debug = format!("{s:?}");
     assert!(debug.contains("Warning"));
 }
 
 #[test]
 fn test_rule_category_display_performance() {
     let c = RuleCategory::Performance;
-    assert_eq!(format!("{}", c), "Performance");
+    assert_eq!(format!("{c}"), "Performance");
 }
 
 #[test]
 fn test_rule_category_display_style() {
     let c = RuleCategory::Style;
-    assert_eq!(format!("{}", c), "Style");
+    assert_eq!(format!("{c}"), "Style");
 }
 
 #[test]
 fn test_rule_category_display_security() {
     let c = RuleCategory::Security;
-    assert_eq!(format!("{}", c), "Security");
+    assert_eq!(format!("{c}"), "Security");
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn test_rule_category_copy() {
 #[test]
 fn test_rule_category_debug() {
     let c = RuleCategory::Style;
-    let debug = format!("{:?}", c);
+    let debug = format!("{c:?}");
     assert!(debug.contains("Style"));
 }
 
@@ -143,7 +143,7 @@ fn test_violation_debug() {
         suggestion:  None,
         query_index: 0
     };
-    let debug = format!("{:?}", v);
+    let debug = format!("{v:?}");
     assert!(debug.contains("TEST004"));
 }
 
@@ -180,7 +180,7 @@ fn test_rule_info_debug() {
         severity: Severity::Info,
         category: RuleCategory::Style
     };
-    let debug = format!("{:?}", info);
+    let debug = format!("{info:?}");
     assert!(debug.contains("STYLE001"));
 }
 
@@ -261,7 +261,7 @@ fn test_analysis_report_clone() {
 #[test]
 fn test_analysis_report_debug() {
     let report = AnalysisReport::new(1, 1);
-    let debug = format!("{:?}", report);
+    let debug = format!("{report:?}");
     assert!(debug.contains("AnalysisReport"));
 }
 

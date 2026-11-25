@@ -86,7 +86,7 @@ use crate::{
 /// ```
 pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<AnalyzeResult> {
     let schema_sql = read_to_string(&params.schema_path)
-        .map_err(|e| file_read_error(&params.schema_path, e))?;
+        .map_err(|e| file_read_error(&params.schema_path, &e))?;
     let queries_sql = read_queries_input(&params.queries_path)?;
     let sql_dialect = convert_dialect(params.dialect);
     let parsed_schema = Schema::parse(&schema_sql, sql_dialect)?;
@@ -96,7 +96,7 @@ pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<Ana
     let runner = RuleRunner::with_schema_and_config_and_dialect(
         sql_dialect,
         parsed_schema.clone(),
-        config.rules.clone()
+        &config.rules
     );
     let static_report = runner.analyze(&parsed_queries);
     let static_output = format_static_analysis(&static_report, &output_opts);
@@ -113,10 +113,10 @@ pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<Ana
             })
         });
     }
-    let effective_api_key = params.api_key.or(config.llm.api_key.clone());
+    let effective_api_key = params.api_key.or_else(|| config.llm.api_key.clone());
     let effective_ollama_url =
         get_effective_ollama_url(params.ollama_url, config.llm.ollama_url.clone());
-    if !has_llm_access(&effective_api_key, &params.provider) {
+    if !has_llm_access(effective_api_key.as_ref(), params.provider) {
         return Ok(AnalyzeResult {
             exit_code,
             static_output,
@@ -124,7 +124,7 @@ pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<Ana
             dry_run_info: None
         });
     }
-    let model_name = get_effective_model(params.model, config.llm.model.clone(), &params.provider);
+    let model_name = get_effective_model(params.model, config.llm.model.clone(), params.provider);
     let llm_provider = build_llm_provider(
         params.provider,
         effective_api_key,

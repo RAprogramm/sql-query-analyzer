@@ -6,7 +6,7 @@
 //!
 //! # Supported Dialects
 //!
-//! - **ClickHouse**: Handles `CODEC`, `TTL`, `SETTINGS` clauses
+//! - **`ClickHouse`**: Handles `CODEC`, `TTL`, `SETTINGS` clauses
 //!
 //! # Architecture
 //!
@@ -43,23 +43,23 @@ pub use crate::preprocessor::clickhouse::{MaterializedViewInfo, ProjectionInfo, 
 /// Metadata extracted during preprocessing.
 #[derive(Debug, Default, Clone)]
 pub struct PreprocessorMetadata {
-    /// Column codecs: column_name -> codec_expression
+    /// Column codecs: `column_name` -> `codec_expression`
     pub codecs:             HashMap<String, String>,
     /// TTL expressions extracted from table definitions
     pub ttl_expressions:    Vec<String>,
-    /// Table settings: setting_name -> value
+    /// Table settings: `setting_name` -> value
     pub settings:           HashMap<String, String>,
-    /// Partition expressions (ClickHouse PARTITION BY)
+    /// Partition expressions (`ClickHouse` PARTITION BY)
     pub partition_by:       Vec<String>,
-    /// Sample by expressions (ClickHouse SAMPLE BY)
+    /// Sample by expressions (`ClickHouse` SAMPLE BY)
     pub sample_by:          Vec<String>,
-    /// Data skipping indexes (ClickHouse INDEX ... TYPE ... GRANULARITY)
+    /// Data skipping indexes (`ClickHouse` INDEX ... TYPE ... GRANULARITY)
     pub skip_indexes:       Vec<SkipIndexInfo>,
-    /// Projections (ClickHouse PROJECTION ... AS SELECT)
+    /// Projections (`ClickHouse` PROJECTION ... AS SELECT)
     pub projections:        Vec<ProjectionInfo>,
-    /// Dictionary names (ClickHouse CREATE DICTIONARY)
+    /// Dictionary names (`ClickHouse` CREATE DICTIONARY)
     pub dictionaries:       Vec<String>,
-    /// Materialized views (ClickHouse CREATE MATERIALIZED VIEW)
+    /// Materialized views (`ClickHouse` CREATE MATERIALIZED VIEW)
     pub materialized_views: Vec<MaterializedViewInfo>
 }
 
@@ -75,7 +75,7 @@ pub struct PreprocessorResult {
 impl Preprocessor {
     /// Create a new preprocessor for the specified dialect.
     #[must_use]
-    pub fn new(dialect: SqlDialect) -> Self {
+    pub const fn new(dialect: SqlDialect) -> Self {
         Self {
             dialect
         }

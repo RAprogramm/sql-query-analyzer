@@ -161,7 +161,7 @@ pub trait Rule: Send + Sync {
 ///     ..Default::default()
 /// };
 ///
-/// let runner = RuleRunner::with_config(config);
+/// let runner = RuleRunner::with_config(&config);
 /// let queries = parse_queries("SELECT id FROM users", SqlDialect::Generic).unwrap();
 /// let report = runner.analyze(&queries);
 ///
@@ -180,8 +180,9 @@ impl Default for RuleRunner {
 
 impl RuleRunner {
     /// Create a new runner with all default rules
+    #[must_use]
     pub fn new() -> Self {
-        Self::with_config(RulesConfig::default())
+        Self::with_config(&RulesConfig::default())
     }
 
     /// Create a new runner with configuration
@@ -191,7 +192,8 @@ impl RuleRunner {
     /// - Performance rules (PERF001-PERF020) detect query optimization issues
     /// - Style rules (STYLE001-STYLE004) enforce best practices
     /// - Security rules (SEC001-SEC008) detect dangerous operations
-    pub fn with_config(config: RulesConfig) -> Self {
+    #[must_use]
+    pub fn with_config(config: &RulesConfig) -> Self {
         Self::with_dialect_and_config(SqlDialect::Generic, config)
     }
 
@@ -200,7 +202,8 @@ impl RuleRunner {
     /// When the dialect is [`SqlDialect::ClickHouse`], ClickHouse-specific
     /// query rules (CH001, CH004, CH009-CH011, CH013-CH014, CH016, CH019) are
     /// registered in addition to the generic rules.
-    pub fn with_dialect_and_config(dialect: SqlDialect, config: RulesConfig) -> Self {
+    #[must_use]
+    pub fn with_dialect_and_config(dialect: SqlDialect, config: &RulesConfig) -> Self {
         let mut all_rules: Vec<Box<dyn Rule>> = vec![
             Box::new(performance::SelectStarWithoutLimit),
             Box::new(performance::LeadingWildcard),
@@ -274,14 +277,15 @@ impl RuleRunner {
 
     /// Create runner with schema-aware rules for a specific dialect.
     ///
-    /// When the dialect is [`SqlDialect::ClickHouse`], ClickHouse schema-aware
-    /// rules (CH002-CH003, CH005-CH007, CH012) are registered too.
+    /// When the dialect is [`SqlDialect::ClickHouse`], `ClickHouse`
+    /// schema-aware rules (CH002-CH003, CH005-CH007, CH012) are registered too.
+    #[must_use]
     pub fn with_schema_and_config_and_dialect(
         dialect: SqlDialect,
         schema: Schema,
-        config: RulesConfig
+        config: &RulesConfig
     ) -> Self {
-        let mut runner = Self::with_dialect_and_config(dialect, config.clone());
+        let mut runner = Self::with_dialect_and_config(dialect, config);
         let mut schema_rules: Vec<Box<dyn Rule>> = vec![
             Box::new(schema_aware::ColumnNotInSchema::new(schema.clone())),
             Box::new(schema_aware::ImplicitTypeConversion::new(schema.clone())),

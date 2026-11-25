@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use colored::Colorize;
 use serde::Serialize;
 
@@ -87,49 +89,77 @@ pub fn format_analysis_result(queries: &[Query], analysis: &str, opts: &OutputOp
 fn format_text_summary(queries: &[Query], opts: &OutputOptions) -> String {
     let mut summary = String::from("SQL Queries:\n\n");
     for (i, query) in queries.iter().enumerate() {
-        let header = format!("Query #{} ({}):", i + 1, query.query_type);
+        let header = format!("Query #{} ({}):", i + 1, query.kind);
         if opts.colored {
             summary.push_str(&header.cyan().bold().to_string());
         } else {
             summary.push_str(&header);
         }
         summary.push('\n');
-        summary.push_str(&format!("{}\n", query.raw));
+        let _ = writeln!(summary, "{}", query.raw);
         if !query.cte_names.is_empty() {
-            let ctes: Vec<&str> = query.cte_names.iter().map(|s| s.as_str()).collect();
-            summary.push_str(&format!("CTEs: {}\n", ctes.join(", ")));
+            let ctes: Vec<&str> = query
+                .cte_names
+                .iter()
+                .map(compact_str::CompactString::as_str)
+                .collect();
+            let _ = writeln!(summary, "CTEs: {}", ctes.join(", "));
         }
-        let tables: Vec<&str> = query.tables.iter().map(|s| s.as_str()).collect();
-        summary.push_str(&format!("Tables: {}\n", tables.join(", ")));
+        let tables: Vec<&str> = query
+            .tables
+            .iter()
+            .map(compact_str::CompactString::as_str)
+            .collect();
+        let _ = writeln!(summary, "Tables: {}", tables.join(", "));
         if !query.where_cols.is_empty() {
-            let cols: Vec<&str> = query.where_cols.iter().map(|s| s.as_str()).collect();
-            summary.push_str(&format!("WHERE columns: {}\n", cols.join(", ")));
+            let cols: Vec<&str> = query
+                .where_cols
+                .iter()
+                .map(compact_str::CompactString::as_str)
+                .collect();
+            let _ = writeln!(summary, "WHERE columns: {}", cols.join(", "));
         }
         if !query.join_cols.is_empty() {
-            let cols: Vec<&str> = query.join_cols.iter().map(|s| s.as_str()).collect();
-            summary.push_str(&format!("JOIN columns: {}\n", cols.join(", ")));
+            let cols: Vec<&str> = query
+                .join_cols
+                .iter()
+                .map(compact_str::CompactString::as_str)
+                .collect();
+            let _ = writeln!(summary, "JOIN columns: {}", cols.join(", "));
         }
         if !query.order_cols.is_empty() {
-            let cols: Vec<&str> = query.order_cols.iter().map(|s| s.as_str()).collect();
-            summary.push_str(&format!("ORDER BY columns: {}\n", cols.join(", ")));
+            let cols: Vec<&str> = query
+                .order_cols
+                .iter()
+                .map(compact_str::CompactString::as_str)
+                .collect();
+            let _ = writeln!(summary, "ORDER BY columns: {}", cols.join(", "));
         }
         if !query.group_cols.is_empty() {
-            let cols: Vec<&str> = query.group_cols.iter().map(|s| s.as_str()).collect();
-            summary.push_str(&format!("GROUP BY columns: {}\n", cols.join(", ")));
+            let cols: Vec<&str> = query
+                .group_cols
+                .iter()
+                .map(compact_str::CompactString::as_str)
+                .collect();
+            let _ = writeln!(summary, "GROUP BY columns: {}", cols.join(", "));
         }
         if !query.having_cols.is_empty() {
-            let cols: Vec<&str> = query.having_cols.iter().map(|s| s.as_str()).collect();
-            summary.push_str(&format!("HAVING columns: {}\n", cols.join(", ")));
+            let cols: Vec<&str> = query
+                .having_cols
+                .iter()
+                .map(compact_str::CompactString::as_str)
+                .collect();
+            let _ = writeln!(summary, "HAVING columns: {}", cols.join(", "));
         }
         if !query.window_funcs.is_empty() {
             let funcs: Vec<&str> = query.window_funcs.iter().map(|w| w.name.as_str()).collect();
-            summary.push_str(&format!("Window functions: {}\n", funcs.join(", ")));
+            let _ = writeln!(summary, "Window functions: {}", funcs.join(", "));
         }
         if let Some(limit) = query.limit {
-            summary.push_str(&format!("LIMIT: {}\n", limit));
+            let _ = writeln!(summary, "LIMIT: {limit}");
         }
         if let Some(offset) = query.offset {
-            summary.push_str(&format!("OFFSET: {}\n", offset));
+            let _ = writeln!(summary, "OFFSET: {offset}");
         }
         if query.has_distinct {
             summary.push_str("Has DISTINCT: yes\n");
@@ -141,35 +171,40 @@ fn format_text_summary(queries: &[Query], opts: &OutputOptions) -> String {
             summary.push_str("Has subquery: yes\n");
         }
         if opts.verbose {
-            let c = query.complexity();
-            let complexity_label = if c.score < 5 {
-                if opts.colored {
-                    "Low".green().to_string()
-                } else {
-                    "Low".to_string()
-                }
-            } else if c.score < 15 {
-                if opts.colored {
-                    "Medium".yellow().to_string()
-                } else {
-                    "Medium".to_string()
-                }
-            } else if opts.colored {
-                "High".red().to_string()
-            } else {
-                "High".to_string()
-            };
-            summary.push_str(&format!(
-                "Complexity: {} (score: {})\n",
-                complexity_label, c.score
-            ));
+            write_complexity(&mut summary, query, opts);
         }
         summary.push('\n');
     }
     summary
 }
 
-/// Format static analysis report
+/// Append the colored complexity line for a query to `summary`.
+fn write_complexity(summary: &mut String, query: &Query, opts: &OutputOptions) {
+    let c = query.complexity();
+    let complexity_label = if c.score < 5 {
+        if opts.colored {
+            "Low".green().to_string()
+        } else {
+            "Low".to_string()
+        }
+    } else if c.score < 15 {
+        if opts.colored {
+            "Medium".yellow().to_string()
+        } else {
+            "Medium".to_string()
+        }
+    } else if opts.colored {
+        "High".red().to_string()
+    } else {
+        "High".to_string()
+    };
+    let _ = writeln!(
+        summary,
+        "Complexity: {} (score: {})",
+        complexity_label, c.score
+    );
+}
+#[must_use]
 pub fn format_static_analysis(report: &AnalysisReport, opts: &OutputOptions) -> String {
     match opts.format {
         OutputFormat::Json => serde_json::to_string_pretty(report).unwrap_or_default(),
@@ -282,14 +317,15 @@ fn format_text_analysis(report: &AnalysisReport, opts: &OutputOptions) -> String
                 }
             }
         };
-        output.push_str(&format!(
-            "  [{severity:>5}] {rule_id}: {message}\n",
+        let _ = writeln!(
+            output,
+            "  [{severity:>5}] {rule_id}: {message}",
             severity = severity_str,
             rule_id = violation.rule_id,
             message = violation.message
-        ));
+        );
         if let Some(suggestion) = &violation.suggestion {
-            let suggestion_line = format!("         → {}\n", suggestion);
+            let suggestion_line = format!("         → {suggestion}\n");
             if opts.colored {
                 output.push_str(&suggestion_line.dimmed().to_string());
             } else {

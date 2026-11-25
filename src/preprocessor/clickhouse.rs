@@ -1,13 +1,13 @@
 //! ClickHouse-specific SQL preprocessing.
 //!
-//! Handles ClickHouse DDL constructs not supported by sqlparser:
+//! Handles `ClickHouse` DDL constructs not supported by sqlparser:
 //! - `CODEC(...)` - Column compression codecs
 //! - `TTL ...` - Data expiration rules
 //! - `SETTINGS ...` - Table-level settings
 //!
 //! # Codec Syntax
 //!
-//! ClickHouse supports various compression codecs:
+//! `ClickHouse` supports various compression codecs:
 //! ```sql
 //! CREATE TABLE t (
 //!     col1 String CODEC(ZSTD),
@@ -30,22 +30,23 @@ use regex::Regex;
 
 use super::{PreprocessorMetadata, PreprocessorResult};
 
-/// Metadata for a ClickHouse data skipping index.
+/// Metadata for a `ClickHouse` data skipping index.
 #[derive(Debug, Clone)]
 pub struct SkipIndexInfo {
     /// Index name
     pub name:        String,
     /// Indexed expression (column or expression)
     pub expr:        String,
-    /// Index type (minmax, set, bloom_filter, ngrambf_v1, tokenbf_v1, text)
+    /// Index type (minmax, set, `bloom_filter`, `ngrambf_v1`, `tokenbf_v1`,
+    /// text)
     pub type_name:   String,
-    /// Optional type arguments (e.g. "100" for set, "0.01" for bloom_filter)
+    /// Optional type arguments (e.g. "100" for set, "0.01" for `bloom_filter`)
     pub type_args:   Option<String>,
     /// Granularity in granules
     pub granularity: usize
 }
 
-/// Metadata for a ClickHouse projection.
+/// Metadata for a `ClickHouse` projection.
 #[derive(Debug, Clone)]
 pub struct ProjectionInfo {
     /// Projection name
@@ -54,7 +55,7 @@ pub struct ProjectionInfo {
     pub query: String
 }
 
-/// Metadata for a ClickHouse materialized view.
+/// Metadata for a `ClickHouse` materialized view.
 #[derive(Debug, Clone)]
 pub struct MaterializedViewInfo {
     /// View name
@@ -88,12 +89,12 @@ static TTL_REGEX: LazyLock<Regex> =
 static SETTINGS_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)\bSETTINGS\s+([^;]+)").expect("valid regex"));
 
-/// Regex for matching PARTITION BY clauses (ClickHouse DDL).
+/// Regex for matching PARTITION BY clauses (`ClickHouse` DDL).
 static PARTITION_BY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\bPARTITION\s+BY\s+(\S+(?:\([^)]*\))?)").expect("valid regex")
 });
 
-/// Regex for matching SAMPLE BY clauses (ClickHouse DDL).
+/// Regex for matching SAMPLE BY clauses (`ClickHouse` DDL).
 static SAMPLE_BY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?is)\bSAMPLE\s+BY\s+(.+?)(\s+SETTINGS\b|\s+TTL\b|;|$)").expect("valid regex")
 });
@@ -102,7 +103,7 @@ static SAMPLE_BY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 static SETTING_PAIR_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(\w+)\s*=\s*('[^']*'|\d+)").expect("valid regex"));
 
-/// Regex for matching ClickHouse skipping index definitions.
+/// Regex for matching `ClickHouse` skipping index definitions.
 /// Matches: `INDEX name expr TYPE type(args) GRANULARITY n`
 static SKIP_INDEX_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
@@ -141,32 +142,32 @@ static MATERIALIZED_VIEW_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     .expect("valid regex")
 });
 
-/// Regex for stripping the ClickHouse engine clause between a materialized view
-/// header and its `AS SELECT` body, so the statement becomes parseable.
+/// Regex for stripping the `ClickHouse` engine clause between a materialized
+/// view header and its `AS SELECT` body, so the statement becomes parseable.
 /// Group 1 keeps the header, group 3 keeps the `AS SELECT` keyword.
 static MATERIALIZED_VIEW_ENGINE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?is)(\bCREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?[\w.]+(?:\s+TO\s+[\w.]+)?)(.*?)(\bAS\s+SELECT\b)")
         .expect("valid regex")
 });
 
-/// Regex for a ClickHouse `ALTER TABLE ... UPDATE ... WHERE ...` mutation.
+/// Regex for a `ClickHouse` `ALTER TABLE ... UPDATE ... WHERE ...` mutation.
 static MUTATION_UPDATE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?is)\bALTER\s+TABLE\s+([\w.]+)\s+UPDATE\s+(.+?)\s+WHERE\s+(.+?)(;|$)")
         .expect("valid regex")
 });
 
-/// Regex for a ClickHouse `ALTER TABLE ... DELETE WHERE ...` mutation.
+/// Regex for a `ClickHouse` `ALTER TABLE ... DELETE WHERE ...` mutation.
 static MUTATION_DELETE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?is)\bALTER\s+TABLE\s+([\w.]+)\s+DELETE\s+WHERE\s+(.+?)(;|$)")
         .expect("valid regex")
 });
 
-/// Rewrite ClickHouse mutation statements into standard `UPDATE`/`DELETE` so
+/// Rewrite `ClickHouse` mutation statements into standard `UPDATE`/`DELETE` so
 /// `sqlparser` can parse them.
 ///
-/// ClickHouse expresses row mutations as `ALTER TABLE ... UPDATE/DELETE`, which
-/// the parser rejects. Rewriting them to the standard form keeps the statement
-/// analysable (and lets the mutation rule flag it).
+/// `ClickHouse` expresses row mutations as `ALTER TABLE ... UPDATE/DELETE`,
+/// which the parser rejects. Rewriting them to the standard form keeps the
+/// statement analysable (and lets the mutation rule flag it).
 pub fn rewrite_mutations(sql: &str) -> String {
     let step = MUTATION_UPDATE_REGEX.replace_all(sql, "UPDATE ${1} SET ${2} WHERE ${3}${4}");
     MUTATION_DELETE_REGEX
@@ -174,9 +175,10 @@ pub fn rewrite_mutations(sql: &str) -> String {
         .to_string()
 }
 
-/// Preprocess ClickHouse SQL.
+/// Preprocess `ClickHouse` SQL.
 ///
 /// Removes unsupported constructs and extracts metadata.
+#[must_use]
 pub fn preprocess(sql: &str) -> PreprocessorResult {
     let mut metadata = PreprocessorMetadata::default();
     let mut result = sql.to_string();
@@ -363,7 +365,7 @@ fn find_projections(sql: &str) -> Vec<(usize, usize, ProjectionInfo)> {
 }
 
 /// Return the byte index of the `)` matching the `(` at `open`.
-fn matching_paren(bytes: &[u8], open: usize) -> Option<usize> {
+const fn matching_paren(bytes: &[u8], open: usize) -> Option<usize> {
     let mut depth = 0;
     let mut in_str = false;
     let mut i = open;
@@ -393,7 +395,7 @@ fn matching_paren(bytes: &[u8], open: usize) -> Option<usize> {
 
 /// Find the end of a `PROJECTION name AS SELECT ...` body: the first top-level
 /// comma or closing parenthesis outside of strings and nested parentheses.
-fn projection_as_end(bytes: &[u8], start: usize) -> Option<usize> {
+const fn projection_as_end(bytes: &[u8], start: usize) -> Option<usize> {
     let mut depth = 0;
     let mut in_str = false;
     let mut i = start;
@@ -407,9 +409,8 @@ fn projection_as_end(bytes: &[u8], start: usize) -> Option<usize> {
             match c {
                 b'\'' => in_str = true,
                 b'(' => depth += 1,
-                b')' if depth == 0 => return Some(i),
+                b')' | b',' if depth == 0 => return Some(i),
                 b')' => depth -= 1,
-                b',' if depth == 0 => return Some(i),
                 _ => {}
             }
         }
@@ -464,11 +465,8 @@ fn remove_dictionaries(sql: &str) -> String {
 /// Extract `CREATE MATERIALIZED VIEW` metadata into metadata.
 fn extract_materialized_views(sql: &str, metadata: &mut PreprocessorMetadata) {
     for cap in MATERIALIZED_VIEW_REGEX.captures_iter(sql) {
-        let whole = cap.get(0).map(|m| m.end()).unwrap_or(0);
-        let name = cap
-            .get(1)
-            .map(|m| m.as_str().to_string())
-            .unwrap_or_default();
+        let whole = cap.get(0).map_or(0, |m| m.end());
+        let name = cap.get(1).map_or_default(|m| m.as_str().to_string());
         let target = cap.get(2).map(|m| m.as_str().to_string());
         let query = sql[whole..]
             .split(';')
@@ -543,12 +541,12 @@ mod tests {
 
     #[test]
     fn test_multiple_codecs() {
-        let sql = r#"
+        let sql = r"
             CREATE TABLE t (
                 col1 String CODEC(ZSTD),
                 col2 UInt64 CODEC(Delta, LZ4)
             ) ENGINE = MergeTree ORDER BY col1
-        "#;
+        ";
         let result = preprocess(sql);
         assert!(!result.sql.contains("CODEC"));
         assert_eq!(
@@ -594,7 +592,7 @@ mod tests {
 
     #[test]
     fn test_complex_clickhouse_ddl() {
-        let sql = r#"
+        let sql = r"
             CREATE TABLE events ON CLUSTER default (
                 event_date Date,
                 event_time DateTime CODEC(Delta, ZSTD),
@@ -605,7 +603,7 @@ mod tests {
             ORDER BY (event_date, user_id)
             TTL event_date + INTERVAL 90 DAY
             SETTINGS index_granularity = 8192
-        "#;
+        ";
         let result = preprocess(sql);
         assert!(!result.sql.contains("CODEC"));
         assert!(!result.sql.contains("TTL"));
@@ -702,7 +700,10 @@ mod tests {
         let result = preprocess(sql);
         assert_eq!(result.sql, sql);
         assert!(result.metadata.codecs.is_empty());
-        assert!(result.metadata.ttl_expressions.is_empty());
+        assert_eq!(
+            result.metadata.ttl_expressions,
+            [] as [std::string::String; 0]
+        );
         assert!(result.metadata.settings.is_empty());
     }
 }

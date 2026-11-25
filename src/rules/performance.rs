@@ -15,7 +15,7 @@ impl Rule for ScalarSubquery {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         let upper = query.raw.to_uppercase();
@@ -169,7 +169,7 @@ impl Rule for SelectWithoutWhere {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         if query.where_cols.is_empty() && query.limit.is_none() && !query.tables.is_empty() {
@@ -202,7 +202,7 @@ impl Rule for SelectStarWithoutLimit {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         let has_star = query.raw.to_uppercase().contains("SELECT *")
@@ -275,10 +275,7 @@ impl Rule for OrInsteadOfIn {
             return vec![Violation {
                 rule_id: info.id,
                 rule_name: info.name,
-                message: format!(
-                    "Query has {} OR conditions, consider using IN clause",
-                    or_count
-                ),
+                message: format!("Query has {or_count} OR conditions, consider using IN clause"),
                 severity: info.severity,
                 category: info.category,
                 suggestion: Some(
@@ -312,10 +309,7 @@ impl Rule for LargeOffset {
             return vec![Violation {
                 rule_id: info.id,
                 rule_name: info.name,
-                message: format!(
-                    "OFFSET {} is large, causing performance degradation",
-                    offset
-                ),
+                message: format!("OFFSET {offset} is large, causing performance degradation"),
                 severity: info.severity,
                 category: info.category,
                 suggestion: Some("Use keyset pagination (WHERE id > last_id) instead".to_string()),
@@ -340,7 +334,7 @@ impl Rule for MissingJoinCondition {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         let table_count = query.tables.len();
@@ -351,8 +345,7 @@ impl Rule for MissingJoinCondition {
                 rule_id: info.id,
                 rule_name: info.name,
                 message: format!(
-                    "Query references {} tables without apparent JOIN conditions",
-                    table_count
+                    "Query references {table_count} tables without apparent JOIN conditions"
                 ),
                 severity: info.severity,
                 category: info.category,
@@ -366,7 +359,7 @@ impl Rule for MissingJoinCondition {
     }
 }
 
-/// ORDER BY RAND() forces a full scan and sort of every candidate row
+/// ORDER BY `RAND()` forces a full scan and sort of every candidate row
 ///
 /// The database must generate a random value per row and sort the whole
 /// result set before applying LIMIT, so cost stays O(n log n) regardless
@@ -385,7 +378,7 @@ impl Rule for OrderByRandom {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         let upper = query.raw.to_uppercase();
@@ -432,7 +425,7 @@ impl Rule for CountWithoutWhere {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         if !query.where_cols.is_empty() || query.tables.is_empty() {
@@ -530,7 +523,7 @@ impl Rule for LargeInClause {
         vec![Violation {
             rule_id: info.id,
             rule_name: info.name,
-            message: format!("IN clause contains {} values", items),
+            message: format!("IN clause contains {items} values"),
             severity,
             category: info.category,
             suggestion: Some(
@@ -573,7 +566,7 @@ impl Rule for HavingWithoutAggregate {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select || query.having_cols.is_empty() {
+        if query.kind != QueryType::Select || query.having_cols.is_empty() {
             return vec![];
         }
         let upper = query.raw.to_uppercase();
@@ -625,7 +618,7 @@ impl Rule for UnnecessaryDistinct {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select || !query.has_distinct {
+        if query.kind != QueryType::Select || !query.has_distinct {
             return vec![];
         }
         let upper = query.raw.to_uppercase();
@@ -707,7 +700,7 @@ impl Rule for DeeplyNestedSubqueries {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         let upper = query.raw.to_uppercase();
@@ -726,7 +719,7 @@ impl Rule for DeeplyNestedSubqueries {
         vec![Violation {
             rule_id: info.id,
             rule_name: info.name,
-            message: format!("Query nests SELECTs {} levels deep", levels),
+            message: format!("Query nests SELECTs {levels} levels deep"),
             severity,
             category: info.category,
             suggestion: Some(
@@ -776,7 +769,7 @@ impl Rule for RepeatedTableScan {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         let upper = query.raw.to_uppercase();
@@ -787,7 +780,7 @@ impl Rule for RepeatedTableScan {
                 return vec![Violation {
                     rule_id: info.id,
                     rule_name: info.name,
-                    message: format!("Table '{}' is scanned {} times", table, scans),
+                    message: format!("Table '{table}' is scanned {scans} times"),
                     severity: info.severity,
                     category: info.category,
                     suggestion: Some(
@@ -925,7 +918,7 @@ impl Rule for CorrelatedSubquery {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select || !query.has_subquery {
+        if query.kind != QueryType::Select || !query.has_subquery {
             return vec![];
         }
         let upper = query.raw.to_uppercase();

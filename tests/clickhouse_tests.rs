@@ -14,7 +14,7 @@ fn ch_ids(sql: &str, schema_sql: &str) -> Vec<String> {
     let runner = RuleRunner::with_schema_and_config_and_dialect(
         SqlDialect::ClickHouse,
         schema,
-        RulesConfig::default()
+        &RulesConfig::default()
     );
     runner
         .analyze(&queries)
@@ -173,7 +173,7 @@ fn generic_dialect_does_not_run_clickhouse_rules() {
     let runner = RuleRunner::with_schema_and_config_and_dialect(
         SqlDialect::Generic,
         schema,
-        RulesConfig::default()
+        &RulesConfig::default()
     );
     let ids: Vec<String> = runner
         .analyze(&queries)

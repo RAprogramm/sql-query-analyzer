@@ -18,8 +18,9 @@ pub use masterror::{AppError, AppResult};
 ///
 /// * `path` - The file path that failed to read
 /// * `source` - The underlying IO error
-pub fn file_read_error(path: &str, source: std::io::Error) -> AppError {
-    AppError::internal(format!("Failed to read file '{}': {}", path, source))
+#[must_use]
+pub fn file_read_error(path: &str, source: &std::io::Error) -> AppError {
+    AppError::internal(format!("Failed to read file '{path}': {source}"))
 }
 
 /// Create schema parse error with optional position info
@@ -40,11 +41,12 @@ pub fn llm_api_error(message: impl Into<String>) -> AppError {
 }
 
 /// Create HTTP error
-pub fn http_error(err: reqwest::Error) -> AppError {
+#[must_use]
+pub fn http_error(err: &reqwest::Error) -> AppError {
     let msg = if err.is_timeout() {
-        format!("Request timeout: {}", err)
+        format!("Request timeout: {err}")
     } else if err.is_connect() {
-        format!("Connection failed: {}", err)
+        format!("Connection failed: {err}")
     } else if err.is_status() {
         format!("HTTP error {}: {}", err.status().unwrap_or_default(), err)
     } else {
@@ -65,17 +67,18 @@ pub fn config_error(message: impl Into<String>) -> AppError {
 /// - Attempts to extract line and column information from sqlparser errors
 /// - Uses "Line: X, Column Y" pattern matching
 fn format_sql_error(prefix: &str, message: &str) -> String {
-    if let Some(pos) = extract_position(message) {
-        format!(
-            "{prefix} at line {line}, column {column}:\n  {message}",
-            prefix = prefix,
-            line = pos.line,
-            column = pos.column,
-            message = message
-        )
-    } else {
-        format!("{}:\n  {}", prefix, message)
-    }
+    extract_position(message).map_or_else(
+        || format!("{prefix}:\n  {message}"),
+        |pos| {
+            format!(
+                "{prefix} at line {line}, column {column}:\n  {message}",
+                prefix = prefix,
+                line = pos.line,
+                column = pos.column,
+                message = message
+            )
+        }
+    )
 }
 
 struct SqlPosition {

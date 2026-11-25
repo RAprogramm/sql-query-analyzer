@@ -45,6 +45,7 @@ use crate::{
 /// let report = AnalysisReport::new(1, 0);
 /// assert_eq!(calculate_exit_code(&report), 0);
 /// ```
+#[must_use]
 pub fn calculate_exit_code(report: &AnalysisReport) -> i32 {
     if report
         .violations
@@ -52,14 +53,13 @@ pub fn calculate_exit_code(report: &AnalysisReport) -> i32 {
         .any(|v| v.severity == Severity::Error)
     {
         2
-    } else if report
-        .violations
-        .iter()
-        .any(|v| v.severity == Severity::Warning)
-    {
-        1
     } else {
-        0
+        i32::from(
+            report
+                .violations
+                .iter()
+                .any(|v| v.severity == Severity::Warning)
+        )
     }
 }
 
@@ -84,10 +84,10 @@ pub fn read_queries_input(path: &str) -> AppResult<String> {
         let mut buffer = String::new();
         io::stdin()
             .read_to_string(&mut buffer)
-            .map_err(|e| file_read_error("stdin", e))?;
+            .map_err(|e| file_read_error("stdin", &e))?;
         Ok(buffer)
     } else {
-        read_to_string(path).map_err(|e| file_read_error(path, e))
+        read_to_string(path).map_err(|e| file_read_error(path, &e))
     }
 }
 
@@ -133,7 +133,12 @@ pub fn parse_queries_cached(sql: &str, dialect: SqlDialect) -> AppResult<Vec<Que
 /// # Returns
 ///
 /// An `OutputOptions` struct configured with the given settings.
-pub fn create_output_options(format: Format, no_color: bool, verbose: bool) -> OutputOptions {
+#[must_use]
+pub const fn create_output_options(
+    format: Format,
+    no_color: bool,
+    verbose: bool
+) -> OutputOptions {
     OutputOptions {
         format: convert_format(format),
         colored: !no_color,
@@ -144,7 +149,7 @@ pub fn create_output_options(format: Format, no_color: bool, verbose: bool) -> O
 /// Builds an LLM provider configuration from CLI parameters.
 ///
 /// Constructs the appropriate `LlmProvider` variant based on the
-/// selected provider type. For cloud providers (OpenAI, Anthropic),
+/// selected provider type. For cloud providers (`OpenAI`, Anthropic),
 /// an API key is required.
 ///
 /// # Arguments
@@ -197,7 +202,7 @@ pub fn build_llm_provider(
 
 /// Reads an optional non-empty base URL override from the environment.
 ///
-/// Used to point cloud providers at Azure OpenAI, gateways, or
+/// Used to point cloud providers at Azure `OpenAI`, gateways, or
 /// OpenAI-compatible proxies. Returns `None` when the variable is unset or
 /// blank.
 fn env_base_url(var: &str) -> Option<String> {
@@ -218,7 +223,8 @@ fn env_base_url(var: &str) -> Option<String> {
 /// # Returns
 ///
 /// `true` if LLM access is available, `false` otherwise.
-pub fn has_llm_access(api_key: &Option<String>, provider: &Provider) -> bool {
+#[must_use]
+pub const fn has_llm_access(api_key: Option<&String>, provider: Provider) -> bool {
     api_key.is_some() || matches!(provider, Provider::Ollama)
 }
 
@@ -238,10 +244,11 @@ pub fn has_llm_access(api_key: &Option<String>, provider: &Provider) -> bool {
 /// # Returns
 ///
 /// The resolved model name.
+#[must_use]
 pub fn get_effective_model(
     model: Option<String>,
     config_model: Option<String>,
-    provider: &Provider
+    provider: Provider
 ) -> String {
     model
         .or(config_model)
@@ -261,6 +268,7 @@ pub fn get_effective_model(
 /// # Returns
 ///
 /// The resolved Ollama URL.
+#[must_use]
 pub fn get_effective_ollama_url(url: String, config_url: Option<String>) -> String {
     if url == "http://localhost:11434" {
         config_url.unwrap_or(url)
@@ -351,39 +359,39 @@ mod tests {
 
     #[test]
     fn test_has_llm_access_with_api_key() {
-        assert!(has_llm_access(&Some("key".to_string()), &Provider::OpenAI));
+        assert!(has_llm_access(Some(&"key".to_string()), Provider::OpenAI));
     }
 
     #[test]
     fn test_has_llm_access_ollama_no_key() {
-        assert!(has_llm_access(&None, &Provider::Ollama));
+        assert!(has_llm_access(None, Provider::Ollama));
     }
 
     #[test]
     fn test_has_llm_access_openai_no_key() {
-        assert!(!has_llm_access(&None, &Provider::OpenAI));
+        assert!(!has_llm_access(None, Provider::OpenAI));
     }
 
     #[test]
     fn test_has_llm_access_anthropic_no_key() {
-        assert!(!has_llm_access(&None, &Provider::Anthropic));
+        assert!(!has_llm_access(None, Provider::Anthropic));
     }
 
     #[test]
     fn test_get_effective_model_explicit() {
-        let model = get_effective_model(Some("gpt-4o".to_string()), None, &Provider::OpenAI);
+        let model = get_effective_model(Some("gpt-4o".to_string()), None, Provider::OpenAI);
         assert_eq!(model, "gpt-4o");
     }
 
     #[test]
     fn test_get_effective_model_from_config() {
-        let model = get_effective_model(None, Some("claude-3".to_string()), &Provider::Anthropic);
+        let model = get_effective_model(None, Some("claude-3".to_string()), Provider::Anthropic);
         assert_eq!(model, "claude-3");
     }
 
     #[test]
     fn test_get_effective_model_default() {
-        let model = get_effective_model(None, None, &Provider::OpenAI);
+        let model = get_effective_model(None, None, Provider::OpenAI);
         assert_eq!(model, "gpt-4");
     }
 

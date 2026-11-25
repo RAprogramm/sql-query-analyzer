@@ -104,7 +104,8 @@ pub struct AnalysisReport {
 }
 
 impl AnalysisReport {
-    pub fn new(queries_count: usize, rules_count: usize) -> Self {
+    #[must_use]
+    pub const fn new(queries_count: usize, rules_count: usize) -> Self {
         Self {
             violations: Vec::new(),
             queries_count,
@@ -116,6 +117,7 @@ impl AnalysisReport {
         self.violations.push(violation);
     }
 
+    #[must_use]
     pub fn error_count(&self) -> usize {
         self.violations
             .iter()
@@ -123,6 +125,7 @@ impl AnalysisReport {
             .count()
     }
 
+    #[must_use]
     pub fn warning_count(&self) -> usize {
         self.violations
             .iter()
@@ -130,6 +133,7 @@ impl AnalysisReport {
             .count()
     }
 
+    #[must_use]
     pub fn info_count(&self) -> usize {
         self.violations
             .iter()

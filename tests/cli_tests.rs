@@ -23,56 +23,59 @@ fn test_provider_default_model_ollama() {
 
 #[test]
 fn test_dialect_variants() {
-    let _generic = Dialect::Generic;
-    let _mysql = Dialect::Mysql;
-    let _postgresql = Dialect::Postgresql;
-    let _sqlite = Dialect::Sqlite;
+    let dialects = [
+        Dialect::Generic,
+        Dialect::Mysql,
+        Dialect::Postgresql,
+        Dialect::Sqlite
+    ];
+    assert_eq!(dialects.len(), 4);
 }
 
 #[test]
 fn test_format_variants() {
-    let _text = Format::Text;
-    let _json = Format::Json;
-    let _yaml = Format::Yaml;
-    let _sarif = Format::Sarif;
+    let formats = [Format::Text, Format::Json, Format::Yaml, Format::Sarif];
+    assert_eq!(formats.len(), 4);
 }
 
 #[test]
 fn test_provider_clone() {
     let provider = Provider::OpenAI;
-    let cloned = provider.clone();
+    let cloned = provider;
     assert_eq!(cloned.default_model(), "gpt-4");
 }
 
 #[test]
 fn test_dialect_clone() {
     let dialect = Dialect::Mysql;
-    let _cloned = dialect.clone();
+    let cloned = dialect;
+    assert!(matches!(cloned, Dialect::Mysql));
 }
 
 #[test]
 fn test_format_clone() {
     let format = Format::Json;
-    let _cloned = format.clone();
+    let copied = format;
+    assert!(matches!(copied, Format::Json));
 }
 
 #[test]
 fn test_provider_debug() {
     let provider = Provider::Ollama;
-    let debug = format!("{:?}", provider);
+    let debug = format!("{provider:?}");
     assert!(debug.contains("Ollama"));
 }
 
 #[test]
 fn test_dialect_debug() {
     let dialect = Dialect::Postgresql;
-    let debug = format!("{:?}", dialect);
+    let debug = format!("{dialect:?}");
     assert!(debug.contains("Postgresql"));
 }
 
 #[test]
 fn test_format_debug() {
     let format = Format::Sarif;
-    let debug = format!("{:?}", format);
+    let debug = format!("{format:?}");
     assert!(debug.contains("Sarif"));
 }

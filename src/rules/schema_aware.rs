@@ -10,7 +10,8 @@ pub struct MissingIndexOnFilterColumn {
 }
 
 impl MissingIndexOnFilterColumn {
-    pub fn new(schema: Schema) -> Self {
+    #[must_use]
+    pub const fn new(schema: Schema) -> Self {
         Self {
             schema
         }
@@ -36,7 +37,7 @@ impl Rule for MissingIndexOnFilterColumn {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         let indexed_cols = self.get_indexed_columns();
@@ -48,10 +49,10 @@ impl Rule for MissingIndexOnFilterColumn {
                 violations.push(Violation {
                     rule_id: info.id,
                     rule_name: info.name,
-                    message: format!("Column '{}' in WHERE clause has no index", col),
+                    message: format!("Column '{col}' in WHERE clause has no index"),
                     severity: info.severity,
                     category: info.category,
-                    suggestion: Some(format!("Consider adding index on '{}'", col)),
+                    suggestion: Some(format!("Consider adding index on '{col}'")),
                     query_index
                 });
             }
@@ -63,10 +64,10 @@ impl Rule for MissingIndexOnFilterColumn {
                 violations.push(Violation {
                     rule_id: info.id,
                     rule_name: info.name,
-                    message: format!("Column '{}' in JOIN clause has no index", col),
+                    message: format!("Column '{col}' in JOIN clause has no index"),
                     severity: info.severity,
                     category: info.category,
-                    suggestion: Some(format!("Consider adding index on '{}'", col)),
+                    suggestion: Some(format!("Consider adding index on '{col}'")),
                     query_index
                 });
             }
@@ -81,7 +82,8 @@ pub struct ColumnNotInSchema {
 }
 
 impl ColumnNotInSchema {
-    pub fn new(schema: Schema) -> Self {
+    #[must_use]
+    pub const fn new(schema: Schema) -> Self {
         Self {
             schema
         }
@@ -115,7 +117,7 @@ impl Rule for ColumnNotInSchema {
             .chain(query.join_cols.iter())
             .chain(query.order_cols.iter())
             .chain(query.group_cols.iter())
-            .map(|s| s.as_str())
+            .map(compact_str::CompactString::as_str)
             .collect();
         for col in query_cols {
             let col_lower = col.to_lowercase();
@@ -127,7 +129,7 @@ impl Rule for ColumnNotInSchema {
                 violations.push(Violation {
                     rule_id: info.id,
                     rule_name: info.name,
-                    message: format!("Column '{}' not found in schema", col),
+                    message: format!("Column '{col}' not found in schema"),
                     severity: info.severity,
                     category: info.category,
                     suggestion: Some("Check column name spelling or table reference".to_string()),
@@ -151,7 +153,8 @@ pub struct JoinOnNonIndexedColumn {
 }
 
 impl JoinOnNonIndexedColumn {
-    pub fn new(schema: Schema) -> Self {
+    #[must_use]
+    pub const fn new(schema: Schema) -> Self {
         Self {
             schema
         }
@@ -169,7 +172,7 @@ impl Rule for JoinOnNonIndexedColumn {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select || query.join_cols.is_empty() {
+        if query.kind != QueryType::Select || query.join_cols.is_empty() {
             return vec![];
         }
         let mut violations = Vec::new();
@@ -233,7 +236,8 @@ pub struct ImplicitTypeConversion {
 }
 
 impl ImplicitTypeConversion {
-    pub fn new(schema: Schema) -> Self {
+    #[must_use]
+    pub const fn new(schema: Schema) -> Self {
         Self {
             schema
         }
@@ -302,8 +306,7 @@ impl Rule for ImplicitTypeConversion {
                     rule_id: info.id,
                     rule_name: info.name,
                     message: format!(
-                        "Text column '{}' is compared with a numeric literal",
-                        col
+                        "Text column '{col}' is compared with a numeric literal"
                     ),
                     severity: info.severity,
                     category: info.category,
@@ -325,7 +328,8 @@ pub struct SuggestIndex {
 }
 
 impl SuggestIndex {
-    pub fn new(schema: Schema) -> Self {
+    #[must_use]
+    pub const fn new(schema: Schema) -> Self {
         Self {
             schema
         }
@@ -343,7 +347,7 @@ impl Rule for SuggestIndex {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         let indexed_cols: Vec<String> = self
@@ -359,7 +363,7 @@ impl Rule for SuggestIndex {
                 return vec![Violation {
                     rule_id: info.id,
                     rule_name: info.name,
-                    message: format!("ORDER BY column '{}' could benefit from index", col),
+                    message: format!("ORDER BY column '{col}' could benefit from index"),
                     severity: info.severity,
                     category: info.category,
                     suggestion: Some(format!(

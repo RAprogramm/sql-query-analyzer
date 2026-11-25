@@ -8,20 +8,20 @@
 //!
 //! | Provider | Default Endpoint | Authentication |
 //! |----------|------------------|----------------|
-//! | OpenAI | `api.openai.com` (overridable) | Bearer token |
+//! | `OpenAI` | `api.openai.com` (overridable) | Bearer token |
 //! | Anthropic | `api.anthropic.com` (overridable) | x-api-key header |
 //! | Ollama | Local (configurable) | None |
 //!
 //! # Custom Endpoints
 //!
-//! OpenAI and Anthropic accept an optional `base_url` override, enabling
-//! Azure OpenAI, self-hosted gateways, OpenAI-compatible proxies, and local
-//! servers (llama.cpp, Ollama, vLLM, LM Studio, LocalAI). When `base_url` is
+//! `OpenAI` and Anthropic accept an optional `base_url` override, enabling
+//! Azure `OpenAI`, self-hosted gateways, OpenAI-compatible proxies, and local
+//! servers (llama.cpp, Ollama, vLLM, LM Studio, `LocalAI`). When `base_url` is
 //! `None` the official endpoint is used.
 //!
 //! The override accepts either convention used across the ecosystem: a bare
 //! host (`http://127.0.0.1:8080`) or one that already ends in `/v1`
-//! (`http://127.0.0.1:8080/v1`, the form used by the OpenAI SDK and most local
+//! (`http://127.0.0.1:8080/v1`, the form used by the `OpenAI` SDK and most local
 //! servers). A duplicated `/v1` segment is never produced.
 //!
 //! # Retry Behavior
@@ -65,7 +65,7 @@ const GENERIC_PROMPT: &str = "You are a database performance expert. Analyze the
                               queries for potential performance issues, especially regarding index \
                               usage.";
 
-/// Prompt guidance for the ClickHouse dialect.
+/// Prompt guidance for the `ClickHouse` dialect.
 const CLICKHOUSE_PROMPT: &str = "You are a ClickHouse performance expert. Analyze the following \
                                  queries against a columnar OLAP store. Focus on: ORDER BY / \
                                  primary-key prefix usage, partition pruning (PARTITION BY), data \
@@ -73,7 +73,7 @@ const CLICKHOUSE_PROMPT: &str = "You are a ClickHouse performance expert. Analyz
                                  Nullable choices, uniq vs uniqExact, countIf vs subqueries, and \
                                  JOIN strategy (dictionaries/denormalization).";
 
-/// Default OpenAI API base URL used when no override is provided.
+/// Default `OpenAI` API base URL used when no override is provided.
 const OPENAI_BASE_URL: &str = "https://api.openai.com";
 
 /// Default Anthropic API base URL used when no override is provided.
@@ -82,7 +82,7 @@ const ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
 /// LLM provider configuration with authentication credentials.
 #[derive(Debug, Clone)]
 pub enum LlmProvider {
-    /// OpenAI API (GPT-4, GPT-3.5, etc.)
+    /// `OpenAI` API (GPT-4, GPT-3.5, etc.)
     OpenAI {
         /// API key (sk-...)
         api_key:  String,
@@ -102,7 +102,7 @@ pub enum LlmProvider {
     },
     /// Local Ollama instance
     Ollama {
-        /// Base URL (e.g., "http://localhost:11434")
+        /// Base URL (e.g., "<http://localhost:11434>")
         base_url: String,
         /// Model name (e.g., "llama3.2", "codellama")
         model:    String
@@ -204,27 +204,26 @@ fn build_prompt(schema_summary: &str, queries_summary: &str, dialect: SqlDialect
         _ => GENERIC_PROMPT
     };
     format!(
-        "{guidance}\n\n{schema}\n\n{queries}\n\n\
+        "{guidance}\n\n{schema_summary}\n\n{queries_summary}\n\n\
          For each query, identify:\n\
          1. Whether the existing schema design is used effectively\n\
          2. Missing schema features that would improve performance\n\
          3. Full scans or inefficient operations\n\
          4. Suggestions for query optimization\n\
-         Provide specific, actionable recommendations.",
-        guidance = guidance,
-        schema = schema_summary,
-        queries = queries_summary
+         Provide specific, actionable recommendations."
     )
 }
 
 impl LlmClient {
     /// Create new LLM client with default retry configuration
     #[allow(dead_code)]
+    #[must_use]
     pub fn new(provider: LlmProvider) -> Self {
         Self::with_retry_config(provider, RetryConfig::default())
     }
 
     /// Create new LLM client with custom retry configuration
+    #[must_use]
     pub fn with_retry_config(provider: LlmProvider, retry_config: RetryConfig) -> Self {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(120))
@@ -238,6 +237,11 @@ impl LlmClient {
     }
 
     /// Analyze SQL queries using LLM with automatic retry
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::AppError`] if the provider request fails after all
+    /// retry attempts, or if the response cannot be parsed.
     pub async fn analyze(
         &self,
         schema_summary: &str,
@@ -260,13 +264,14 @@ impl LlmClient {
                     delay
                 );
                 sleep(Duration::from_millis(delay)).await;
-                delay = ((delay as f64 * self.retry_config.backoff_factor) as u64)
+                delay = delay
+                    .saturating_mul(u64::from(self.retry_config.backoff_factor))
                     .min(self.retry_config.max_delay_ms);
             }
             match self.call_provider(prompt).await {
                 Ok(result) => return Ok(result),
                 Err(e) => {
-                    if self.is_retryable_error(&e) {
+                    if Self::is_retryable_error(&e) {
                         last_error = Some(e);
                         continue;
                     }
@@ -277,7 +282,7 @@ impl LlmClient {
         Err(last_error.unwrap_or_else(|| llm_api_error("All retry attempts failed")))
     }
 
-    fn is_retryable_error(&self, error: &masterror::AppError) -> bool {
+    fn is_retryable_error(error: &masterror::AppError) -> bool {
         let msg = error.to_string().to_lowercase();
         msg.contains("timeout")
             || msg.contains("connection")
@@ -332,20 +337,17 @@ impl LlmClient {
         let response = self
             .client
             .post(join_endpoint(base, "v1/chat/completions"))
-            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Authorization", format!("Bearer {api_key}"))
             .json(&request)
             .send()
             .await
-            .map_err(http_error)?;
+            .map_err(|e| http_error(&e))?;
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
-            return Err(llm_api_error(format!(
-                "OpenAI API error {}: {}",
-                status, text
-            )));
+            return Err(llm_api_error(format!("OpenAI API error {status}: {text}")));
         }
-        let result: OpenAIResponse = response.json().await.map_err(http_error)?;
+        let result: OpenAIResponse = response.json().await.map_err(|e| http_error(&e))?;
         result
             .choices
             .first()
@@ -377,16 +379,15 @@ impl LlmClient {
             .json(&request)
             .send()
             .await
-            .map_err(http_error)?;
+            .map_err(|e| http_error(&e))?;
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
             return Err(llm_api_error(format!(
-                "Anthropic API error {}: {}",
-                status, text
+                "Anthropic API error {status}: {text}"
             )));
         }
-        let result: AnthropicResponse = response.json().await.map_err(http_error)?;
+        let result: AnthropicResponse = response.json().await.map_err(|e| http_error(&e))?;
         result
             .content
             .first()
@@ -407,16 +408,13 @@ impl LlmClient {
             .json(&request)
             .send()
             .await
-            .map_err(http_error)?;
+            .map_err(|e| http_error(&e))?;
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
-            return Err(llm_api_error(format!(
-                "Ollama API error {}: {}",
-                status, text
-            )));
+            return Err(llm_api_error(format!("Ollama API error {status}: {text}")));
         }
-        let result: OllamaResponse = response.json().await.map_err(http_error)?;
+        let result: OllamaResponse = response.json().await.map_err(|e| http_error(&e))?;
         Ok(result.response)
     }
 }
@@ -435,7 +433,7 @@ mod tests {
             max_retries:      0,
             initial_delay_ms: 1,
             max_delay_ms:     1,
-            backoff_factor:   1.0
+            backoff_factor:   1
         }
     }
 
@@ -475,17 +473,16 @@ mod tests {
 
     #[test]
     fn retryable_error_detection() {
-        let client = LlmClient::with_retry_config(
-            LlmProvider::Ollama {
-                base_url: "http://x".into(),
-                model:    "m".into()
-            },
-            no_retry()
-        );
-        assert!(client.is_retryable_error(&llm_api_error("connection refused")));
-        assert!(client.is_retryable_error(&llm_api_error("HTTP 429 rate limit")));
-        assert!(client.is_retryable_error(&llm_api_error("server 503")));
-        assert!(!client.is_retryable_error(&llm_api_error("bad request 400")));
+        assert!(LlmClient::is_retryable_error(&llm_api_error(
+            "connection refused"
+        )));
+        assert!(LlmClient::is_retryable_error(&llm_api_error(
+            "HTTP 429 rate limit"
+        )));
+        assert!(LlmClient::is_retryable_error(&llm_api_error("server 503")));
+        assert!(!LlmClient::is_retryable_error(&llm_api_error(
+            "bad request 400"
+        )));
     }
 
     #[test]

@@ -10,7 +10,7 @@ fn test_default_config() {
     let config = Config::default();
     assert!(config.llm.api_key.is_none());
     assert!(config.llm.provider.is_none());
-    assert!(config.rules.disabled.is_empty());
+    assert_eq!(config.rules.disabled, [] as [std::string::String; 0]);
 }
 
 #[test]
@@ -18,13 +18,13 @@ fn test_default_retry_config() {
     let config = Config::default();
     assert_eq!(config.retry.max_retries, 3);
     assert_eq!(config.retry.initial_delay_ms, 1000);
-    assert_eq!(config.retry.backoff_factor, 2.0);
+    assert_eq!(config.retry.backoff_factor, 2);
 }
 
 #[test]
 fn test_default_rules_config() {
     let config = RulesConfig::default();
-    assert!(config.disabled.is_empty());
+    assert_eq!(config.disabled, [] as [std::string::String; 0]);
     assert!(config.severity.is_empty());
 }
 
@@ -69,7 +69,7 @@ fn test_retry_config_default() {
     assert_eq!(config.max_retries, 3);
     assert_eq!(config.initial_delay_ms, 1000);
     assert_eq!(config.max_delay_ms, 30000);
-    assert_eq!(config.backoff_factor, 2.0);
+    assert_eq!(config.backoff_factor, 2);
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn test_config_load() {
 #[test]
 fn test_config_debug() {
     let config = Config::default();
-    let debug = format!("{:?}", config);
+    let debug = format!("{config:?}");
     assert!(debug.contains("Config"));
 }
 
@@ -89,7 +89,7 @@ fn test_config_debug() {
 fn test_llm_config_debug() {
     use sql_query_analyzer::config::LlmConfig;
     let config = LlmConfig::default();
-    let debug = format!("{:?}", config);
+    let debug = format!("{config:?}");
     assert!(debug.contains("LlmConfig"));
 }
 
@@ -97,14 +97,14 @@ fn test_llm_config_debug() {
 fn test_retry_config_debug() {
     use sql_query_analyzer::config::RetryConfig;
     let config = RetryConfig::default();
-    let debug = format!("{:?}", config);
+    let debug = format!("{config:?}");
     assert!(debug.contains("RetryConfig"));
 }
 
 #[test]
 fn test_rules_config_debug() {
     let config = RulesConfig::default();
-    let debug = format!("{:?}", config);
+    let debug = format!("{config:?}");
     assert!(debug.contains("RulesConfig"));
 }
 

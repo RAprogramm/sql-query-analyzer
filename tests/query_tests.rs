@@ -8,7 +8,7 @@ fn test_parse_simple_select() {
     let sql = "SELECT id, name FROM users WHERE id = 1";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Select);
+    assert_eq!(queries[0].kind, QueryType::Select);
     assert_eq!(queries[0].tables.len(), 1);
     assert_eq!(queries[0].tables[0].as_str(), "users");
     assert!(queries[0].where_cols.iter().any(|c| c.as_str() == "id"));
@@ -19,7 +19,7 @@ fn test_parse_select_star() {
     let sql = "SELECT * FROM orders";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Select);
+    assert_eq!(queries[0].kind, QueryType::Select);
     assert_eq!(queries[0].tables[0].as_str(), "orders");
 }
 
@@ -43,7 +43,7 @@ fn test_parse_insert() {
     let sql = "INSERT INTO users (id, name) VALUES (1, 'test')";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Insert);
+    assert_eq!(queries[0].kind, QueryType::Insert);
     assert_eq!(queries[0].tables[0].as_str(), "users");
 }
 
@@ -52,7 +52,7 @@ fn test_parse_update() {
     let sql = "UPDATE users SET name = 'new' WHERE id = 1";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Update);
+    assert_eq!(queries[0].kind, QueryType::Update);
     assert_eq!(queries[0].tables[0].as_str(), "users");
     assert!(queries[0].where_cols.iter().any(|c| c.as_str() == "id"));
 }
@@ -62,7 +62,7 @@ fn test_parse_update_without_where() {
     let sql = "UPDATE users SET status = 'inactive'";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Update);
+    assert_eq!(queries[0].kind, QueryType::Update);
     assert!(queries[0].where_cols.is_empty());
 }
 
@@ -71,7 +71,7 @@ fn test_parse_delete() {
     let sql = "DELETE FROM users WHERE id = 1";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Delete);
+    assert_eq!(queries[0].kind, QueryType::Delete);
     assert!(queries[0].where_cols.iter().any(|c| c.as_str() == "id"));
 }
 
@@ -80,7 +80,7 @@ fn test_parse_delete_without_where() {
     let sql = "DELETE FROM users";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Delete);
+    assert_eq!(queries[0].kind, QueryType::Delete);
     assert!(queries[0].where_cols.is_empty());
 }
 
@@ -399,7 +399,7 @@ fn test_recursive_cte() {
     let sql = "WITH RECURSIVE nums AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM nums WHERE n < 10) SELECT * FROM nums";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert!(!queries[0].cte_names.is_empty());
+    assert_ne!(queries[0].cte_names, [] as [compact_str::CompactString; 0]);
 }
 
 #[test]
@@ -443,7 +443,7 @@ fn test_clickhouse_simple_select() {
     let sql = "SELECT id, name FROM users WHERE id = 1";
     let queries = parse_queries(sql, SqlDialect::ClickHouse).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Select);
+    assert_eq!(queries[0].kind, QueryType::Select);
 }
 
 #[test]

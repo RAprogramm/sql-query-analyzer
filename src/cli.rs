@@ -27,7 +27,7 @@ pub enum Commands {
         #[arg(short, long, value_enum, default_value = "ollama")]
         provider: Provider,
 
-        /// API key for OpenAI or Anthropic
+        /// API key for `OpenAI` or Anthropic
         #[arg(short, long, env = "LLM_API_KEY", hide_env_values = true)]
         api_key: Option<String>,
 
@@ -61,7 +61,7 @@ pub enum Commands {
     }
 }
 
-#[derive(Debug, Clone, ValueEnum)]
+#[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum Provider {
     OpenAI,
     Anthropic,
@@ -70,7 +70,8 @@ pub enum Provider {
 
 impl Provider {
     /// Get default model for provider
-    pub fn default_model(&self) -> &str {
+    #[must_use]
+    pub const fn default_model(&self) -> &str {
         match self {
             Self::OpenAI => "gpt-4",
             Self::Anthropic => "claude-sonnet-4-20250514",
@@ -79,7 +80,7 @@ impl Provider {
     }
 }
 
-#[derive(Debug, Clone, ValueEnum)]
+#[derive(Debug, Clone, Copy, ValueEnum)]
 #[non_exhaustive]
 pub enum Dialect {
     Generic,
@@ -89,7 +90,7 @@ pub enum Dialect {
     Clickhouse
 }
 
-#[derive(Debug, Clone, ValueEnum)]
+#[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum Format {
     Text,
     Json,

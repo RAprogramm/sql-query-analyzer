@@ -32,7 +32,7 @@ fn make_violation(
         severity,
         category: RuleCategory::Performance,
         query_index,
-        suggestion: suggestion.map(|s| s.to_string())
+        suggestion: suggestion.map(std::string::ToString::to_string)
     }
 }
 
@@ -437,7 +437,7 @@ fn test_format_static_analysis_multiple_queries() {
 #[test]
 fn test_output_format_debug() {
     let format = OutputFormat::Text;
-    let debug = format!("{:?}", format);
+    let debug = format!("{format:?}");
     assert!(debug.contains("Text"));
 }
 
@@ -451,7 +451,7 @@ fn test_output_format_copy() {
 #[test]
 fn test_output_options_debug() {
     let opts = OutputOptions::default();
-    let debug = format!("{:?}", opts);
+    let debug = format!("{opts:?}");
     assert!(debug.contains("OutputOptions"));
 }
 
@@ -462,7 +462,7 @@ fn test_output_options_clone() {
         colored: false,
         verbose: true
     };
-    let cloned = opts.clone();
+    let cloned = opts;
     assert!(matches!(cloned.format, OutputFormat::Yaml));
     assert!(!cloned.colored);
     assert!(cloned.verbose);
@@ -474,7 +474,7 @@ fn test_analysis_result_debug() {
         queries:  vec![],
         analysis: "test".to_string()
     };
-    let debug = format!("{:?}", result);
+    let debug = format!("{result:?}");
     assert!(debug.contains("AnalysisResult"));
 }
 

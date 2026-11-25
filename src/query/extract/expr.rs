@@ -27,6 +27,12 @@ pub fn extract_columns_from_expr(
         }
         Expr::UnaryOp {
             expr, ..
+        }
+        | Expr::Cast {
+            expr, ..
+        }
+        | Expr::Extract {
+            expr, ..
         } => {
             extract_columns_from_expr(expr, columns);
         }
@@ -42,10 +48,6 @@ pub fn extract_columns_from_expr(
                 }
             }
         }
-        Expr::Subquery(_)
-        | Expr::Exists {
-            ..
-        } => {}
         Expr::Between {
             expr,
             low,
@@ -56,10 +58,7 @@ pub fn extract_columns_from_expr(
             extract_columns_from_expr(low, columns);
             extract_columns_from_expr(high, columns);
         }
-        Expr::IsNull(e) | Expr::IsNotNull(e) => {
-            extract_columns_from_expr(e, columns);
-        }
-        Expr::Nested(e) => {
+        Expr::IsNull(e) | Expr::IsNotNull(e) | Expr::Nested(e) => {
             extract_columns_from_expr(e, columns);
         }
         Expr::Function(func) => {
@@ -90,16 +89,6 @@ pub fn extract_columns_from_expr(
             if let Some(else_res) = else_result {
                 extract_columns_from_expr(else_res, columns);
             }
-        }
-        Expr::Cast {
-            expr, ..
-        } => {
-            extract_columns_from_expr(expr, columns);
-        }
-        Expr::Extract {
-            expr, ..
-        } => {
-            extract_columns_from_expr(expr, columns);
         }
         _ => {}
     }

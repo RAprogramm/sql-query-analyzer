@@ -1,8 +1,8 @@
 //! ClickHouse-specific analysis rules.
 //!
-//! These rules encode ClickHouse best practices: sparse primary index usage,
+//! These rules encode `ClickHouse` best practices: sparse primary index usage,
 //! partition pruning, data skipping indexes, columnar-storage anti-patterns,
-//! and OLTP-style misuse. They are registered only when the ClickHouse
+//! and OLTP-style misuse. They are registered only when the `ClickHouse`
 //! dialect is selected.
 
 use super::{Rule, RuleCategory, RuleInfo, Severity, Violation};
@@ -21,7 +21,7 @@ fn find_table<'a>(schema: &'a Schema, name: &str) -> Option<&'a TableInfo> {
         .find(|t| t.name.eq_ignore_ascii_case(bare))
 }
 
-/// Extracts bare identifiers from a ClickHouse expression such as
+/// Extracts bare identifiers from a `ClickHouse` expression such as
 /// `toYYYYMM(event_date)` or `(event_date, user_id)`.
 fn identifiers_in(expr: &str) -> Vec<String> {
     let mut out = Vec::new();
@@ -64,7 +64,7 @@ impl Rule for SelectStarWideTable {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         let upper = query.raw.to_uppercase();
@@ -103,7 +103,7 @@ impl Rule for FilterNotUsingPrimaryKey {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select || query.where_cols.is_empty() {
+        if query.kind != QueryType::Select || query.where_cols.is_empty() {
             return vec![];
         }
         let mut violations = Vec::new();
@@ -159,7 +159,7 @@ impl Rule for PartitionPruningMissed {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select || query.where_cols.is_empty() {
+        if query.kind != QueryType::Select || query.where_cols.is_empty() {
             return vec![];
         }
         let mut violations = Vec::new();
@@ -226,7 +226,7 @@ impl Rule for FunctionOnKeyColumn {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         let upper = query.raw.to_uppercase();
@@ -269,7 +269,7 @@ impl Rule for MissingSkipIndex {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select || query.where_cols.is_empty() {
+        if query.kind != QueryType::Select || query.where_cols.is_empty() {
             return vec![];
         }
         let mut violations = Vec::new();
@@ -297,8 +297,7 @@ impl Rule for MissingSkipIndex {
                         severity: info.severity,
                         category: info.category,
                         suggestion: Some(format!(
-                            "ADD INDEX idx_{col} {col} TYPE minmax GRANULARITY 4 (or bloom_filter for high-cardinality)",
-                            col = col
+                            "ADD INDEX idx_{col} {col} TYPE minmax GRANULARITY 4 (or bloom_filter for high-cardinality)"
                         )),
                         query_index
                     });
@@ -309,7 +308,7 @@ impl Rule for MissingSkipIndex {
     }
 }
 
-/// LowCardinality applied to a likely high-cardinality column.
+/// `LowCardinality` applied to a likely high-cardinality column.
 pub struct LowCardinalityHighCardinality {
     pub schema: Schema
 }
@@ -478,10 +477,7 @@ impl Rule for CountIfOpportunity {
         vec![Violation {
             rule_id: info.id,
             rule_name: info.name,
-            message: format!(
-                "{} count subqueries scan the table separately",
-                count_subqueries
-            ),
+            message: format!("{count_subqueries} count subqueries scan the table separately"),
             severity: info.severity,
             category: info.category,
             suggestion: Some(
@@ -507,7 +503,7 @@ impl Rule for OrderByInSubquery {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select || !query.has_subquery {
+        if query.kind != QueryType::Select || !query.has_subquery {
             return vec![];
         }
         let upper = query.raw.to_uppercase();
@@ -546,7 +542,7 @@ impl Rule for GroupByOrderMismatch {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select || query.group_cols.is_empty() {
+        if query.kind != QueryType::Select || query.group_cols.is_empty() {
             return vec![];
         }
         let mut violations = Vec::new();
@@ -558,7 +554,10 @@ impl Rule for GroupByOrderMismatch {
             if key.is_empty() {
                 continue;
             }
-            let first_group = query.group_cols.first().map(|c| c.to_lowercase());
+            let first_group = query
+                .group_cols
+                .first()
+                .map(compact_str::CompactString::to_lowercase);
             let matches = first_group
                 .as_ref()
                 .is_some_and(|g| key.first().is_some_and(|k| k.eq_ignore_ascii_case(g)));
@@ -599,7 +598,7 @@ impl Rule for JoinBigTables {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select || query.join_cols.is_empty() {
+        if query.kind != QueryType::Select || query.join_cols.is_empty() {
             return vec![];
         }
         if query.tables.len() < 2 {
@@ -638,7 +637,7 @@ impl Rule for FinalUsage {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if !query.has_final {
+        if !query.clickhouse.has_final {
             return vec![];
         }
         let info = self.info();
@@ -672,7 +671,7 @@ impl Rule for PrewhereOpportunity {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select
+        if query.kind != QueryType::Select
             || query.where_cols.is_empty()
             || !query.prewhere_cols.is_empty()
         {
@@ -709,7 +708,7 @@ impl Rule for HeavyMutation {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Update && query.query_type != QueryType::Delete {
+        if query.kind != QueryType::Update && query.kind != QueryType::Delete {
             return vec![];
         }
         let info = self.info();
@@ -829,7 +828,7 @@ impl Rule for GroupByStringKey {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select || query.group_cols.is_empty() {
+        if query.kind != QueryType::Select || query.group_cols.is_empty() {
             return vec![];
         }
         let mut violations = Vec::new();

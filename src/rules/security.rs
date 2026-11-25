@@ -21,7 +21,7 @@ impl Rule for TruncateDetected {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Truncate {
+        if query.kind != QueryType::Truncate {
             return vec![];
         }
         let info = self.info();
@@ -30,8 +30,7 @@ impl Rule for TruncateDetected {
             rule_id: info.id,
             rule_name: info.name,
             message: format!(
-                "TRUNCATE removes all rows from table(s) '{}' without logging individual deletions",
-                table_names
+                "TRUNCATE removes all rows from table(s) '{table_names}' without logging individual deletions"
             ),
             severity: info.severity,
             category: info.category,
@@ -58,7 +57,7 @@ impl Rule for MissingWhereInUpdate {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Update {
+        if query.kind != QueryType::Update {
             return vec![];
         }
         if query.where_cols.is_empty() {
@@ -96,23 +95,19 @@ impl Rule for DropDetected {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Drop {
+        if query.kind != QueryType::Drop {
             return vec![];
         }
         let info = self.info();
         let object_type = query
             .cte_names
             .first()
-            .map(|s| s.as_str())
-            .unwrap_or("object");
+            .map_or("object", compact_str::CompactString::as_str);
         let names = query.tables.join(", ");
         vec![Violation {
             rule_id: info.id,
             rule_name: info.name,
-            message: format!(
-                "DROP {} '{}' permanently destroys data and schema",
-                object_type, names
-            ),
+            message: format!("DROP {object_type} '{names}' permanently destroys data and schema"),
             severity: info.severity,
             category: info.category,
             suggestion: Some(
@@ -234,7 +229,7 @@ impl Rule for PrivilegeChange {
 /// query logs, and error logs, and violate PCI-DSS/SOC2/HIPAA plaintext
 /// storage rules. Flags `IDENTIFIED BY`/`WITH PASSWORD`/`SET PASSWORD`
 /// clauses and string literals assigned or inserted into sensitive columns
-/// (password, secret, api_key, token, and similar).
+/// (password, secret, `api_key`, token, and similar).
 pub struct HardcodedCredential;
 
 const SENSITIVE_COLUMNS: [&str; 9] = [
@@ -291,7 +286,7 @@ fn has_sensitive_assignment(upper: &str) -> bool {
 /// Returns true when an INSERT names a sensitive column before VALUES and
 /// supplies at least one string literal.
 fn has_sensitive_insert(query: &Query, upper: &str) -> bool {
-    if query.query_type != QueryType::Insert {
+    if query.kind != QueryType::Insert {
         return false;
     }
     let Some(values_pos) = upper.find(" VALUES") else {
@@ -425,7 +420,7 @@ impl Rule for MissingWhereInDelete {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Delete {
+        if query.kind != QueryType::Delete {
             return vec![];
         }
         if query.where_cols.is_empty() {

@@ -15,7 +15,7 @@ impl Rule for SelectStar {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         let has_star = query.raw.to_uppercase().contains("SELECT *")
@@ -102,7 +102,7 @@ impl Rule for OrdinalInOrderOrGroupBy {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         let upper = query.raw.to_uppercase();
@@ -146,7 +146,7 @@ impl Rule for MissingTableAlias {
     }
 
     fn check(&self, query: &Query, query_index: usize) -> Vec<Violation> {
-        if query.query_type != QueryType::Select {
+        if query.kind != QueryType::Select {
             return vec![];
         }
         if query.tables.len() <= 1 {
