@@ -486,6 +486,10 @@ The analyzer includes a preprocessor that handles ClickHouse-specific DDL constr
 | `PARTITION BY` | `PARTITION BY toYYYYMM(date)` | Partitioning expressions |
 | `SAMPLE BY` | `SAMPLE BY intHash32(id)` | Sampling key |
 | Skipping index | `INDEX idx col TYPE minmax GRANULARITY 4` | Data skipping indexes |
+| Projection | `PROJECTION p (SELECT ... ORDER BY ...)` | Pre-aggregated views of a table |
+| Dictionary | `CREATE DICTIONARY d (...)` | Key-value lookup dictionaries |
+| Materialized view | `CREATE MATERIALIZED VIEW mv TO dest AS SELECT ...` | Incremental views (engine clause stripped) |
+| Mutation | `ALTER TABLE t UPDATE/DELETE ...` | Rewritten to standard statements for analysis |
 | Query clauses | `PREWHERE`, `FINAL`, `WITH TOTALS`, `WITH FILL` | ClickHouse query modifiers |
 
 ### ClickHouse Rules
@@ -507,6 +511,11 @@ When the ClickHouse dialect is selected, the OLTP index-suggestion rules are rep
 | `CH012` | Info | `GROUP BY` prefix differs from the sort key |
 | `CH016` | Info | Multi-table JOIN (prefer dictionary/denormalization) |
 | `CH019` | Warning | `FINAL` forces read-time deduplication |
+| `CH021` | Info | `WHERE` filter that could use `PREWHERE` |
+| `CH022` | Warning | `ALTER UPDATE/DELETE` mutation is heavy |
+| `CH023` | Warning | Manual `OPTIMIZE TABLE ... FINAL` |
+| `CH024` | Info | JOIN against a table that exists as a dictionary |
+| `CH025` | Info | `GROUP BY` on a plain `String` key (prefer `LowCardinality`) |
 
 ### Example
 

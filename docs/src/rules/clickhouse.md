@@ -82,3 +82,30 @@ left or replace dimension joins with a dictionary.
 
 `FINAL` merges parts at read time. Prefer `argMax`/`argMin` or
 `ReplacingMergeTree` with background merges.
+
+## CH021 — PREWHERE opportunity (Info)
+
+A `WHERE` filter reads all selected columns before filtering. Moving the
+selective filter columns to `PREWHERE` lets ClickHouse read them first and skip
+granules early.
+
+## CH022 — Heavy mutation (Warning)
+
+`ALTER TABLE ... UPDATE/DELETE` rewrites whole parts asynchronously and is
+expensive. Prefer a `ReplacingMergeTree` with a version column, or drop whole
+partitions.
+
+## CH023 — Manual OPTIMIZE FINAL (Warning)
+
+`OPTIMIZE TABLE ... FINAL` rewrites parts synchronously. Rely on background
+merges and reserve `OPTIMIZE FINAL` for maintenance windows.
+
+## CH024 — Dictionary lookup opportunity (Info)
+
+A `JOIN` against a table that is also defined as a dictionary pays full-table
+cost. Use `dictGet`/`dictHas` on the dictionary instead.
+
+## CH025 — GROUP BY on a plain String key (Info)
+
+Grouping on a plain `String` builds large hash tables. Use
+`LowCardinality(String)` for low-cardinality grouping keys.
