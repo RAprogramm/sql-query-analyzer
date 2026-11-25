@@ -36,8 +36,10 @@ The crate follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.htm
 with Cargo's `0.x` interpretation:
 
 - While the major is `0`, **breaking changes** (`feat!:`) bump the minor.
-- **Additive, non-breaking** changes (new public exports, bug fixes) bump
-  the patch.
+- **New features** (`feat:`) also bump the minor — `features_always_increment_minor = true`,
+  matching the established cadence where every batch of new rules shipped
+  as a minor (`0.14 -> 0.15 -> 0.16`).
+- **Bug fixes** and other non-feature commits bump the patch.
 
 After 1.0 the standard major/minor/patch rules apply.
 
