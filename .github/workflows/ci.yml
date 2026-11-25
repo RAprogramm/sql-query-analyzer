@@ -165,79 +165,9 @@ jobs:
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}
 
-  # Stage 5: Changelog (only on main after build)
-  changelog:
-    needs: build
-    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.result == 'success'
-    permissions:
-      contents: write
-    uses: ./.github/workflows/_changelog.yml
-
-  # Stage 6: Tag release (after changelog)
-  tag:
-    needs: [build, changelog]
-    if: |
-      always() &&
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      needs.build.result == 'success' &&
-      (needs.changelog.result == 'success' || needs.changelog.result == 'skipped')
-    permissions:
-      contents: write
-    uses: ./.github/workflows/_tag.yml
-
-  # Check if release should proceed
-  should-release:
-    needs: tag
-    if: always() && needs.tag.result == 'success'
-    runs-on: ubuntu-latest
-    outputs:
-      release: ${{ steps.check.outputs.release }}
-      version: ${{ needs.tag.outputs.version }}
-    steps:
-      - name: Check if new tag
-        id: check
-        run: |
-          echo "new_tag='${NEEDS_TAG_OUTPUTS_NEW_TAG}'"
-          echo "version='${NEEDS_TAG_OUTPUTS_VERSION}'"
-          if [ "${NEEDS_TAG_OUTPUTS_NEW_TAG}" = "true" ]; then
-            echo "release=true" >> $GITHUB_OUTPUT
-          else
-            echo "release=false" >> $GITHUB_OUTPUT
-          fi
-        env:
-          NEEDS_TAG_OUTPUTS_NEW_TAG: ${{ needs.tag.outputs.new_tag }}
-          NEEDS_TAG_OUTPUTS_VERSION: ${{ needs.tag.outputs.version }}
-
-  # Stage 7: Release builds (only if new tag)
-  release-build:
-    needs: should-release
-    if: always() && needs.should-release.result == 'success' && needs.should-release.outputs.release == 'true'
-    uses: ./.github/workflows/_release-build.yml
-    with:
-      new_tag: ${{ needs.should-release.outputs.release }}
-
-  # Stage 8: Create release and publish (after release builds)
-  release:
-    needs: [should-release, release-build]
-    if: always() && needs.should-release.result == 'success' && needs.should-release.outputs.release == 'true' && needs.release-build.result == 'success'
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    uses: ./.github/workflows/_release.yml
-    with:
-      new_tag: ${{ needs.should-release.outputs.release }}
-      version: ${{ needs.should-release.outputs.version }}
-
-  publish:
-    needs: [should-release, release-build]
-    if: always() && needs.should-release.result == 'success' && needs.should-release.outputs.release == 'true' && needs.release-build.result == 'success'
-    uses: ./.github/workflows/_publish.yml
-    with:
-      new_tag: ${{ needs.should-release.outputs.release }}
-    secrets:
-      CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+  # Releases are not part of CI: they are driven by the `Release-plz`
+  # workflow (release PR -> merge -> publish), with binary assets and
+  # attestations attached by `Release binaries` and `Release attestations`.
 
   # Aggregate gate: single required status context for branch protection
   ci-success:

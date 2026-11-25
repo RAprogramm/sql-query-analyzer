@@ -1,0 +1,102 @@
+# SPDX-FileCopyrightText: 2026 RAprogramm <andrey.rozanov.vl@gmail.com>
+# SPDX-License-Identifier: MIT
+
+# release-plz configuration — https://release-plz.dev/docs/config
+#
+# Releases are driven by Conventional Commits on `main`: release-plz opens
+# (and keeps updating) a single release PR that bumps `Cargo.toml` and
+# prepends a section to `CHANGELOG.md`; merging that PR tags `vX.Y.Z`,
+# publishes to crates.io, and creates the GitHub release.
+#
+# See `RELEASE.md` for the human-facing flow.
+
+[workspace]
+allow_dirty = false
+changelog_update = true
+git_release_enable = true
+git_tag_enable = true
+publish = true
+publish_allow_dirty = false
+release = true
+# Publish only when the pushed commit belongs to a release PR (a branch
+# named `release-plz-*`). Without this, `release-plz release` publishes on
+# ANY push where Cargo.toml is ahead of crates.io — a feature PR that bumps
+# the version manually (breaking changes must, to satisfy the semver gate)
+# would ship straight to crates.io with no curated CHANGELOG section and
+# wrong release notes. With `release_always = false` such a merge instead
+# flows into the next release PR, and publishing happens only when that PR
+# merges.
+release_always = false
+# The semver gate lives in the repository CI (`Semver Checks` job of
+# `ci.yml`, workflow `_semver.yml`), which always runs the fresh upstream
+# cargo-semver-checks. The version bundled into release-plz lags the stable
+# rustdoc JSON format and cannot parse its output, so the bundled check is
+# disabled here rather than duplicating a broken copy of the gate.
+semver_check = false
+pr_labels = ["release"]
+pr_draft = false
+
+[changelog]
+# Keep the Keep a Changelog + SemVer preamble verbatim so a regenerated
+# file continues the curated history byte-identically.
+header = """
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+"""
+# Produce, per release:
+#   ## [x.y.z](compare/vA...vB) - DATE
+#   ### Added / Fixed / Changed / ...
+#   - **scope**: message ([#PR](pull/PR) or [sha](commit/sha))
+# The section headings mirror the previous git-cliff output (`cliff.toml`
+# heritage) so the CHANGELOG keeps one consistent style across releases.
+body = """
+
+## [{{ version | trim_start_matches(pat="v") }}]\
+{% if release_link %}({{ release_link }}){% endif %} - {{ timestamp | date(format="%Y-%m-%d") }}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+{% for commit in commits %}
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}\
+{% if commit.breaking %}**BREAKING:** {% endif %}\
+{{ commit.message | upper_first }}\
+{% if commit.remote.pr_number %} ([#{{ commit.remote.pr_number }}](https://github.com/RAprogramm/sql-query-analyzer/pull/{{ commit.remote.pr_number }}))\
+{% else %} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/RAprogramm/sql-query-analyzer/commit/{{ commit.id }}))\
+{% endif %}
+{% endfor %}
+{% endfor %}
+"""
+# Merge-commit subjects carry a trailing `(#123)`; turn it into an issue
+# link before the conventional-commit parsers classify the type.
+commit_preprocessors = [
+    { pattern = '\((#\d+)\)', replace = "([${1}](https://github.com/RAprogramm/sql-query-analyzer/issues/${1}))" },
+]
+# Same grouping table the previous git-cliff configuration used.
+commit_parsers = [
+    { message = "^feat", group = "Added" },
+    { message = "^fix", group = "Fixed" },
+    { message = "^doc", group = "Documentation" },
+    { message = "^perf", group = "Performance" },
+    { message = "^refactor", group = "Changed" },
+    { message = "^style", group = "Changed" },
+    { message = "^test", group = "Testing" },
+    { message = "^build", group = "Build" },
+    { message = "^ci", group = "CI/CD" },
+    { message = "^chore\\(release\\)", skip = true },
+    { message = "^chore\\(deps\\)", group = "Dependencies" },
+    { message = "^deps", group = "Dependencies" },
+    { message = "^chore", group = "Miscellaneous" },
+    { message = "^revert", group = "Reverted" },
+]
+# Keep breaking changes in the changelog even if their type would be skipped.
+protect_breaking_commits = true
+sort_commits = "newest"
+trim = true
+
+[[package]]
+name = "sql_query_analyzer"
+git_release_name = "v{{ version }}"
+git_tag_name = "v{{ version }}"

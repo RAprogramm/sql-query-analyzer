@@ -1,0 +1,104 @@
+# SPDX-FileCopyrightText: 2026 RAprogramm <andrey.rozanov.vl@gmail.com>
+# SPDX-License-Identifier: MIT
+
+# On every published GitHub release, generate a CycloneDX SBOM and a
+# signed SLSA build-provenance attestation for the `.crate` artefact
+# that release-plz published to crates.io, then attach the SBOM, the
+# Sigstore provenance bundle, and the crate itself to the release so
+# consumers can run `gh attestation verify` against them and supply-chain
+# scanners (e.g. OpenSSF Scorecard Signed-Releases) can see the signature.
+#
+# `workflow_dispatch` is the escape hatch for re-attesting an older tag.
+
+name: Release attestations
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to re-attest (e.g. v0.16.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  attest:
+    name: Generate SBOM and provenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+
+      # No dependency cache here on purpose: this workflow publishes
+      # runtime artefacts, and a restored cache is an unverified input to
+      # them (zizmor cache-poisoning). Release builds are rare enough that
+      # a cold build is the right trade.
+
+      - name: Package crate
+        run: cargo package --no-verify --allow-dirty
+
+      - name: Locate .crate file
+        id: artefact
+        run: |
+          set -euo pipefail
+          crate=$(find target/package -maxdepth 1 -name '*.crate' -print -quit)
+          if [ -z "$crate" ]; then
+            echo "::error::No .crate file produced under target/package" >&2
+            exit 1
+          fi
+          echo "path=$crate" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$crate")" >> "$GITHUB_OUTPUT"
+
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: ./
+          format: cyclonedx-json
+          output-file: sql-query-analyzer-sbom.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate build provenance attestation
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            ${{ steps.artefact.outputs.path }}
+            sql-query-analyzer-sbom.cdx.json
+
+      - name: Attach SBOM, provenance bundle, and crate to GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          CRATE: ${{ steps.artefact.outputs.path }}
+        run: |
+          set -euo pipefail
+          cp "$BUNDLE" sql-query-analyzer-provenance.sigstore.json
+          gh release upload "$TAG" \
+            sql-query-analyzer-sbom.cdx.json \
+            sql-query-analyzer-provenance.sigstore.json \
+            "$CRATE" \
+            --clobber
