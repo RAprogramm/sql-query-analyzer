@@ -16,7 +16,13 @@
 //!
 //! OpenAI and Anthropic accept an optional `base_url` override, enabling
 //! Azure OpenAI, self-hosted gateways, OpenAI-compatible proxies, and local
-//! test servers. When `base_url` is `None` the official endpoint is used.
+//! servers (llama.cpp, Ollama, vLLM, LM Studio, LocalAI). When `base_url` is
+//! `None` the official endpoint is used.
+//!
+//! The override accepts either convention used across the ecosystem: a bare
+//! host (`http://127.0.0.1:8080`) or one that already ends in `/v1`
+//! (`http://127.0.0.1:8080/v1`, the form used by the OpenAI SDK and most local
+//! servers). A duplicated `/v1` segment is never produced.
 //!
 //! # Retry Behavior
 //!
@@ -175,6 +181,21 @@ struct OllamaResponse {
     response: String
 }
 
+/// Joins a base URL with an endpoint path without duplicating a `/v1` segment.
+///
+/// Accepts both ecosystem conventions: a bare host (`http://host:port`) or one
+/// already ending in `/v1` (`http://host:port/v1`). Trailing slashes are ignored.
+fn join_endpoint(base: &str, path: &str) -> String {
+    let base = base.trim_end_matches('/');
+    let path = path.trim_start_matches('/');
+    if let Some(rest) = path.strip_prefix("v1/")
+        && base.ends_with("/v1")
+    {
+        return format!("{base}/{rest}");
+    }
+    format!("{base}/{path}")
+}
+
 /// Build the analysis prompt for a dialect, embedding schema and query
 /// summaries.
 fn build_prompt(schema_summary: &str, queries_summary: &str, dialect: SqlDialect) -> String {
@@ -300,7 +321,7 @@ impl LlmClient {
         base_url: Option<&str>,
         prompt: &str
     ) -> AppResult<String> {
-        let base = base_url.unwrap_or(OPENAI_BASE_URL).trim_end_matches('/');
+        let base = base_url.unwrap_or(OPENAI_BASE_URL);
         let request = OpenAIRequest {
             model:    model.to_string(),
             messages: vec![OpenAIRequestMessage {
@@ -310,7 +331,7 @@ impl LlmClient {
         };
         let response = self
             .client
-            .post(format!("{base}/v1/chat/completions"))
+            .post(join_endpoint(base, "v1/chat/completions"))
             .header("Authorization", format!("Bearer {}", api_key))
             .json(&request)
             .send()
@@ -339,7 +360,7 @@ impl LlmClient {
         base_url: Option<&str>,
         prompt: &str
     ) -> AppResult<String> {
-        let base = base_url.unwrap_or(ANTHROPIC_BASE_URL).trim_end_matches('/');
+        let base = base_url.unwrap_or(ANTHROPIC_BASE_URL);
         let request = AnthropicRequest {
             model:      model.to_string(),
             max_tokens: 4096,
@@ -350,7 +371,7 @@ impl LlmClient {
         };
         let response = self
             .client
-            .post(format!("{base}/v1/messages"))
+            .post(join_endpoint(base, "v1/messages"))
             .header("x-api-key", api_key)
             .header("anthropic-version", "2023-06-01")
             .json(&request)
@@ -523,6 +544,30 @@ mod tests {
             no_retry()
         );
         assert!(client.analyze("s", "q", SqlDialect::Generic).await.is_err());
+    }
+
+    #[test]
+    fn join_endpoint_handles_both_base_url_conventions() {
+        assert_eq!(
+            join_endpoint("http://h:8080", "v1/chat/completions"),
+            "http://h:8080/v1/chat/completions"
+        );
+        assert_eq!(
+            join_endpoint("http://h:8080/v1", "v1/chat/completions"),
+            "http://h:8080/v1/chat/completions"
+        );
+        assert_eq!(
+            join_endpoint("http://h:8080/v1/", "v1/chat/completions"),
+            "http://h:8080/v1/chat/completions"
+        );
+        assert_eq!(
+            join_endpoint("http://h:8080", "v1/messages"),
+            "http://h:8080/v1/messages"
+        );
+        assert_eq!(
+            join_endpoint("http://h:8080/v1", "v1/messages"),
+            "http://h:8080/v1/messages"
+        );
     }
 
     #[tokio::test]
