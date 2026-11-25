@@ -48,6 +48,11 @@ regex = "1"
 tempfile = "3"
 assert_cmd = "2"
 predicates = "3"
+divan = { version = "6.1.0", package = "codspeed-divan-compat" }
+
+[[bench]]
+name = "analyzer"
+harness = false
 
 [profile.release]
 lto = true

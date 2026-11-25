@@ -7,7 +7,7 @@ pub fn extract_columns_from_expr(
     expr: &sqlparser::ast::Expr,
     columns: &mut IndexSet<CompactString>
 ) {
-    use sqlparser::ast::Expr;
+    use sqlparser::ast::{Expr, InTarget};
     match expr {
         Expr::Identifier(ident) => {
             columns.insert(ident.value.as_str().into());
@@ -30,9 +30,9 @@ pub fn extract_columns_from_expr(
         } => {
             extract_columns_from_expr(expr, columns);
         }
-        Expr::InList {
+        Expr::In {
             expr,
-            list,
+            target: InTarget::List(list),
             ..
         } => {
             extract_columns_from_expr(expr, columns);
@@ -40,8 +40,10 @@ pub fn extract_columns_from_expr(
                 extract_columns_from_expr(item, columns);
             }
         }
-        Expr::InSubquery {
-            expr, ..
+        Expr::In {
+            expr,
+            target: InTarget::Subquery(_),
+            ..
         } => {
             extract_columns_from_expr(expr, columns);
         }
@@ -183,10 +185,11 @@ pub fn extract_window_functions(expr: &sqlparser::ast::Expr, windows: &mut Vec<W
 }
 
 pub fn contains_subquery(expr: &sqlparser::ast::Expr) -> bool {
-    use sqlparser::ast::Expr;
+    use sqlparser::ast::{Expr, InTarget};
     match expr {
         Expr::Subquery(_)
-        | Expr::InSubquery {
+        | Expr::In {
+            target: InTarget::Subquery(_),
             ..
         }
         | Expr::Exists {
@@ -198,9 +201,9 @@ pub fn contains_subquery(expr: &sqlparser::ast::Expr) -> bool {
             ..
         } => contains_subquery(left) || contains_subquery(right),
         Expr::Nested(e) => contains_subquery(e),
-        Expr::InList {
+        Expr::In {
             expr,
-            list,
+            target: InTarget::List(list),
             ..
         } => contains_subquery(expr) || list.iter().any(contains_subquery),
         Expr::Case {
