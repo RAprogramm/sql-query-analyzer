@@ -6,11 +6,17 @@
 //!
 //! # Supported Providers
 //!
-//! | Provider | Endpoint | Authentication |
-//! |----------|----------|----------------|
-//! | OpenAI | `api.openai.com` | Bearer token |
-//! | Anthropic | `api.anthropic.com` | x-api-key header |
+//! | Provider | Default Endpoint | Authentication |
+//! |----------|------------------|----------------|
+//! | OpenAI | `api.openai.com` (overridable) | Bearer token |
+//! | Anthropic | `api.anthropic.com` (overridable) | x-api-key header |
 //! | Ollama | Local (configurable) | None |
+//!
+//! # Custom Endpoints
+//!
+//! OpenAI and Anthropic accept an optional `base_url` override, enabling
+//! Azure OpenAI, self-hosted gateways, OpenAI-compatible proxies, and local
+//! test servers. When `base_url` is `None` the official endpoint is used.
 //!
 //! # Retry Behavior
 //!
@@ -61,22 +67,32 @@ const CLICKHOUSE_PROMPT: &str = "You are a ClickHouse performance expert. Analyz
                                  Nullable choices, uniq vs uniqExact, countIf vs subqueries, and \
                                  JOIN strategy (dictionaries/denormalization).";
 
+/// Default OpenAI API base URL used when no override is provided.
+const OPENAI_BASE_URL: &str = "https://api.openai.com";
+
+/// Default Anthropic API base URL used when no override is provided.
+const ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
+
 /// LLM provider configuration with authentication credentials.
 #[derive(Debug, Clone)]
 pub enum LlmProvider {
     /// OpenAI API (GPT-4, GPT-3.5, etc.)
     OpenAI {
         /// API key (sk-...)
-        api_key: String,
+        api_key:  String,
         /// Model identifier (e.g., "gpt-4", "gpt-3.5-turbo")
-        model:   String
+        model:    String,
+        /// Optional base URL override for Azure/proxy/compatible endpoints.
+        base_url: Option<String>
     },
     /// Anthropic API (Claude models)
     Anthropic {
         /// API key
-        api_key: String,
+        api_key:  String,
         /// Model identifier (e.g., "claude-sonnet-4-20250514")
-        model:   String
+        model:    String,
+        /// Optional base URL override for gateways and test servers.
+        base_url: Option<String>
     },
     /// Local Ollama instance
     Ollama {
@@ -256,12 +272,20 @@ impl LlmClient {
         match &self.provider {
             LlmProvider::OpenAI {
                 api_key,
-                model
-            } => self.call_openai(api_key, model, prompt).await,
+                model,
+                base_url
+            } => {
+                self.call_openai(api_key, model, base_url.as_deref(), prompt)
+                    .await
+            }
             LlmProvider::Anthropic {
                 api_key,
-                model
-            } => self.call_anthropic(api_key, model, prompt).await,
+                model,
+                base_url
+            } => {
+                self.call_anthropic(api_key, model, base_url.as_deref(), prompt)
+                    .await
+            }
             LlmProvider::Ollama {
                 base_url,
                 model
@@ -269,7 +293,14 @@ impl LlmClient {
         }
     }
 
-    async fn call_openai(&self, api_key: &str, model: &str, prompt: &str) -> AppResult<String> {
+    async fn call_openai(
+        &self,
+        api_key: &str,
+        model: &str,
+        base_url: Option<&str>,
+        prompt: &str
+    ) -> AppResult<String> {
+        let base = base_url.unwrap_or(OPENAI_BASE_URL).trim_end_matches('/');
         let request = OpenAIRequest {
             model:    model.to_string(),
             messages: vec![OpenAIRequestMessage {
@@ -279,7 +310,7 @@ impl LlmClient {
         };
         let response = self
             .client
-            .post("https://api.openai.com/v1/chat/completions")
+            .post(format!("{base}/v1/chat/completions"))
             .header("Authorization", format!("Bearer {}", api_key))
             .json(&request)
             .send()
@@ -301,7 +332,14 @@ impl LlmClient {
             .ok_or_else(|| llm_api_error("Empty response from OpenAI"))
     }
 
-    async fn call_anthropic(&self, api_key: &str, model: &str, prompt: &str) -> AppResult<String> {
+    async fn call_anthropic(
+        &self,
+        api_key: &str,
+        model: &str,
+        base_url: Option<&str>,
+        prompt: &str
+    ) -> AppResult<String> {
+        let base = base_url.unwrap_or(ANTHROPIC_BASE_URL).trim_end_matches('/');
         let request = AnthropicRequest {
             model:      model.to_string(),
             max_tokens: 4096,
@@ -312,7 +350,7 @@ impl LlmClient {
         };
         let response = self
             .client
-            .post("https://api.anthropic.com/v1/messages")
+            .post(format!("{base}/v1/messages"))
             .header("x-api-key", api_key)
             .header("anthropic-version", "2023-06-01")
             .json(&request)
@@ -485,5 +523,75 @@ mod tests {
             no_retry()
         );
         assert!(client.analyze("s", "q", SqlDialect::Generic).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn openai_success_via_base_url_override() {
+        let base = mock_server(
+            "200 OK",
+            r#"{"choices":[{"message":{"content":"openai result"}}]}"#
+        )
+        .await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::OpenAI {
+                api_key:  "sk-test".into(),
+                model:    "gpt-4".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let out = client.analyze("s", "q", SqlDialect::Generic).await.unwrap();
+        assert_eq!(out, "openai result");
+    }
+
+    #[tokio::test]
+    async fn openai_error_status_is_returned() {
+        let base = mock_server("401 Unauthorized", r#"{"error":"bad key"}"#).await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::OpenAI {
+                api_key:  "sk-bad".into(),
+                model:    "gpt-4".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let err = client
+            .analyze("s", "q", SqlDialect::Generic)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("401"));
+    }
+
+    #[tokio::test]
+    async fn anthropic_success_via_base_url_override() {
+        let base = mock_server("200 OK", r#"{"content":[{"text":"anthropic result"}]}"#).await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Anthropic {
+                api_key:  "sk-ant".into(),
+                model:    "claude-3".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let out = client.analyze("s", "q", SqlDialect::Generic).await.unwrap();
+        assert_eq!(out, "anthropic result");
+    }
+
+    #[tokio::test]
+    async fn anthropic_error_status_is_returned() {
+        let base = mock_server("429 Too Many Requests", "slow down").await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Anthropic {
+                api_key:  "sk-ant".into(),
+                model:    "claude-3".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let err = client
+            .analyze("s", "q", SqlDialect::Generic)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("429"));
     }
 }

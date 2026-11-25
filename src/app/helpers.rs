@@ -5,6 +5,7 @@
 //! providers, and managing configuration defaults.
 
 use std::{
+    env,
     fs::read_to_string,
     io::{self, Read}
 };
@@ -173,7 +174,8 @@ pub fn build_llm_provider(
             })?;
             Ok(LlmProvider::OpenAI {
                 api_key: key,
-                model
+                model,
+                base_url: env_base_url("OPENAI_BASE_URL")
             })
         }
         Provider::Anthropic => {
@@ -182,7 +184,8 @@ pub fn build_llm_provider(
             })?;
             Ok(LlmProvider::Anthropic {
                 api_key: key,
-                model
+                model,
+                base_url: env_base_url("ANTHROPIC_BASE_URL")
             })
         }
         Provider::Ollama => Ok(LlmProvider::Ollama {
@@ -190,6 +193,15 @@ pub fn build_llm_provider(
             model
         })
     }
+}
+
+/// Reads an optional non-empty base URL override from the environment.
+///
+/// Used to point cloud providers at Azure OpenAI, gateways, or
+/// OpenAI-compatible proxies. Returns `None` when the variable is unset or
+/// blank.
+fn env_base_url(var: &str) -> Option<String> {
+    env::var(var).ok().filter(|value| !value.trim().is_empty())
 }
 
 /// Checks if LLM access is available.
