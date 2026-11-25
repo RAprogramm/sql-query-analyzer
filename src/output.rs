@@ -1,6 +1,8 @@
 use colored::Colorize;
 use serde::Serialize;
 
+mod yaml;
+
 use crate::{
     query::Query,
     rules::{AnalysisReport, Severity}
@@ -47,7 +49,7 @@ pub fn format_queries_summary(queries: &[Query], opts: &OutputOptions) -> String
         OutputFormat::Json | OutputFormat::Sarif => {
             serde_json::to_string_pretty(queries).unwrap_or_default()
         }
-        OutputFormat::Yaml => serde_yaml::to_string(queries).unwrap_or_default(),
+        OutputFormat::Yaml => yaml::to_string(&queries).unwrap_or_default(),
         OutputFormat::Text => format_text_summary(queries, opts)
     }
 }
@@ -67,7 +69,7 @@ pub fn format_analysis_result(queries: &[Query], analysis: &str, opts: &OutputOp
                 queries:  queries.to_vec(),
                 analysis: analysis.to_string()
             };
-            serde_yaml::to_string(&result).unwrap_or_default()
+            yaml::to_string(&result).unwrap_or_default()
         }
         OutputFormat::Text => {
             let mut output = String::new();
@@ -171,7 +173,7 @@ fn format_text_summary(queries: &[Query], opts: &OutputOptions) -> String {
 pub fn format_static_analysis(report: &AnalysisReport, opts: &OutputOptions) -> String {
     match opts.format {
         OutputFormat::Json => serde_json::to_string_pretty(report).unwrap_or_default(),
-        OutputFormat::Yaml => serde_yaml::to_string(report).unwrap_or_default(),
+        OutputFormat::Yaml => yaml::to_string(report).unwrap_or_default(),
         OutputFormat::Text => format_text_analysis(report, opts),
         OutputFormat::Sarif => format_sarif(report)
     }

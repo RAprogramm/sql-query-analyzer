@@ -31,7 +31,6 @@ reqwest = { version = "0.13", default-features = false, features = [
 ] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_yaml = "0.9"
 toml = "1"
 masterror = "0.32"
 sqlparser = "0.64"
