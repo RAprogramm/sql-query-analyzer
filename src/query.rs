@@ -47,7 +47,12 @@ impl SqlDialect {
 /// - Parses statements in parallel for better performance
 pub fn parse_queries(sql: &str, dialect: SqlDialect) -> AppResult<Vec<Query>> {
     let parser_dialect = dialect.into_parser_dialect();
-    let statements = Parser::parse_sql(parser_dialect.as_ref(), sql)
+    let sql = if dialect == SqlDialect::ClickHouse {
+        std::borrow::Cow::Owned(crate::preprocessor::clickhouse::rewrite_mutations(sql))
+    } else {
+        std::borrow::Cow::Borrowed(sql)
+    };
+    let statements = Parser::parse_sql(parser_dialect.as_ref(), sql.as_ref())
         .map_err(|e| query_parse_error(e.to_string()))?;
     let mut queries: Vec<Query> = statements
         .into_par_iter()

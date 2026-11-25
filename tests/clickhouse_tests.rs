@@ -183,3 +183,56 @@ fn generic_dialect_does_not_run_clickhouse_rules() {
         .collect();
     assert!(!ids.iter().any(|id| id.starts_with("CH")));
 }
+
+#[test]
+fn ch021_flags_where_without_prewhere() {
+    let v = ch_ids("SELECT x FROM t WHERE x = 1", MERGE_TREE);
+    assert!(v.contains(&"CH021".to_string()));
+}
+
+#[test]
+fn ch021_ok_when_prewhere_present() {
+    let v = ch_ids("SELECT x FROM t PREWHERE x = 1", MERGE_TREE);
+    assert!(!v.contains(&"CH021".to_string()));
+}
+
+#[test]
+fn ch022_flags_alter_update() {
+    let v = ch_ids("ALTER TABLE t UPDATE x = 0 WHERE d = today()", MERGE_TREE);
+    assert!(v.contains(&"CH022".to_string()));
+}
+
+#[test]
+fn ch022_ignores_alter_add_column() {
+    let v = ch_ids("ALTER TABLE t ADD COLUMN y UInt64", MERGE_TREE);
+    assert!(!v.contains(&"CH022".to_string()));
+}
+
+#[test]
+fn ch023_flags_optimize_final() {
+    let v = ch_ids("OPTIMIZE TABLE t FINAL", MERGE_TREE);
+    assert!(v.contains(&"CH023".to_string()));
+}
+
+#[test]
+fn ch024_flags_join_with_dictionary() {
+    let schema = "CREATE DICTIONARY dict (id UInt64) PRIMARY KEY id SOURCE(NULL()) LAYOUT(FLAT()); \
+                  CREATE TABLE t (id UInt64) ENGINE = MergeTree ORDER BY id; \
+                  CREATE TABLE dict (id UInt64) ENGINE = MergeTree ORDER BY id";
+    let v = ch_ids("SELECT t.id FROM t JOIN dict ON t.id = dict.id", schema);
+    assert!(v.contains(&"CH024".to_string()));
+}
+
+#[test]
+fn ch025_flags_group_by_plain_string() {
+    let schema = "CREATE TABLE t (d Date, s String) ENGINE = MergeTree ORDER BY d";
+    let v = ch_ids("SELECT s, count() FROM t GROUP BY s", schema);
+    assert!(v.contains(&"CH025".to_string()));
+}
+
+#[test]
+fn ch025_ok_for_low_cardinality() {
+    let schema = "CREATE TABLE t (d Date, s LowCardinality(String)) ENGINE = MergeTree ORDER BY d";
+    let v = ch_ids("SELECT s, count() FROM t GROUP BY s", schema);
+    assert!(!v.contains(&"CH025".to_string()));
+}

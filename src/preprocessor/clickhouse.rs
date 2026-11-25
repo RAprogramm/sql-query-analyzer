@@ -149,6 +149,31 @@ static MATERIALIZED_VIEW_ENGINE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
         .expect("valid regex")
 });
 
+/// Regex for a ClickHouse `ALTER TABLE ... UPDATE ... WHERE ...` mutation.
+static MUTATION_UPDATE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?is)\bALTER\s+TABLE\s+([\w.]+)\s+UPDATE\s+(.+?)\s+WHERE\s+(.+?)(;|$)")
+        .expect("valid regex")
+});
+
+/// Regex for a ClickHouse `ALTER TABLE ... DELETE WHERE ...` mutation.
+static MUTATION_DELETE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?is)\bALTER\s+TABLE\s+([\w.]+)\s+DELETE\s+WHERE\s+(.+?)(;|$)")
+        .expect("valid regex")
+});
+
+/// Rewrite ClickHouse mutation statements into standard `UPDATE`/`DELETE` so
+/// `sqlparser` can parse them.
+///
+/// ClickHouse expresses row mutations as `ALTER TABLE ... UPDATE/DELETE`, which
+/// the parser rejects. Rewriting them to the standard form keeps the statement
+/// analysable (and lets the mutation rule flag it).
+pub fn rewrite_mutations(sql: &str) -> String {
+    let step = MUTATION_UPDATE_REGEX.replace_all(sql, "UPDATE ${1} SET ${2} WHERE ${3}${4}");
+    MUTATION_DELETE_REGEX
+        .replace_all(&step, "DELETE FROM ${1} WHERE ${2}${3}")
+        .to_string()
+}
+
 /// Preprocess ClickHouse SQL.
 ///
 /// Removes unsupported constructs and extracts metadata.
@@ -661,6 +686,14 @@ mod tests {
         assert_eq!(mv.name, "mv");
         assert_eq!(mv.target.as_deref(), Some("dest"));
         assert!(mv.query.contains("SELECT a FROM src"));
+    }
+
+    #[test]
+    fn test_rewrite_mutations() {
+        let upd = rewrite_mutations("ALTER TABLE t UPDATE x = 0 WHERE d = today()");
+        assert_eq!(upd, "UPDATE t SET x = 0 WHERE d = today()");
+        let del = rewrite_mutations("ALTER TABLE t DELETE WHERE d = today();");
+        assert_eq!(del, "DELETE FROM t WHERE d = today();");
     }
 
     #[test]

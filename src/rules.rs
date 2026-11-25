@@ -242,6 +242,9 @@ impl RuleRunner {
                 Box::new(clickhouse::OrderByInSubquery),
                 Box::new(clickhouse::JoinBigTables),
                 Box::new(clickhouse::FinalUsage),
+                Box::new(clickhouse::PrewhereOpportunity),
+                Box::new(clickhouse::HeavyMutation),
+                Box::new(clickhouse::ManualOptimizeFinal),
             ];
             all_rules.extend(ch_rules);
         }
@@ -314,6 +317,12 @@ impl RuleRunner {
                     schema: schema.clone()
                 }),
                 Box::new(clickhouse::GroupByOrderMismatch {
+                    schema: schema.clone()
+                }),
+                Box::new(clickhouse::DictionaryLookupOpportunity {
+                    schema: schema.clone()
+                }),
+                Box::new(clickhouse::GroupByStringKey {
                     schema
                 }),
             ];
