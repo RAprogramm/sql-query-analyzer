@@ -3,6 +3,9 @@
 
 name: PR Size Check
 
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:
@@ -15,6 +18,9 @@ jobs:
     name: PR Size Check
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && inputs.rust_changed == 'true'
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

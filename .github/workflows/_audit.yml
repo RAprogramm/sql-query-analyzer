@@ -3,6 +3,9 @@
 
 name: Security Audit
 
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:

@@ -3,6 +3,9 @@
 
 name: Dependency Check
 
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:
