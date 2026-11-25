@@ -89,6 +89,11 @@ permissions — `Contents: read & write` and `Pull requests: read &
 write` — and is installed on this repository only. `CRATES_IO_TOKEN`
 must also be set as a repository secret.
 
+Everything else the pipeline needs is self-service: the `release` label
+is created by the workflow itself before release-plz runs. The only
+manual steps are the two secrets above — GitHub deliberately keeps
+App-key provisioning outside automation — and they are set once.
+
 ## Changelog style
 
 `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)

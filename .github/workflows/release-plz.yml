@@ -75,6 +75,14 @@ jobs:
         with:
           toolchain: stable
 
+      # release-plz applies `pr_labels` but never creates the labels, so the
+      # workflow guarantees its own prerequisite instead of failing silently
+      # on a fresh clone of the repository.
+      - name: Ensure the release label exists
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: gh label create release --repo "$GITHUB_REPOSITORY" --color B60205 --description "Release pull request" --force
+
       - name: Run release-plz release-pr
         uses: release-plz/action@7ef5e4d4b0420630cfcaeb182c01e13651d4c577 # v0.5
         with:
