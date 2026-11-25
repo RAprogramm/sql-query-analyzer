@@ -259,6 +259,15 @@ fn test_table_info_clickhouse_fields_default_none() {
 }
 
 #[test]
+fn test_clickhouse_nullable_only_for_nullable_type() {
+    let sql = "CREATE TABLE t (a UInt64, b Nullable(String)) ENGINE = MergeTree ORDER BY a";
+    let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();
+    let t = &schema.tables["t"];
+    assert!(!t.columns[0].is_nullable);
+    assert!(t.columns[1].is_nullable);
+}
+
+#[test]
 fn test_clickhouse_engine_extraction() {
     let sql = "CREATE TABLE logs (id UInt64) ENGINE = MergeTree ORDER BY id";
     let schema = Schema::parse(sql, SqlDialect::ClickHouse).unwrap();

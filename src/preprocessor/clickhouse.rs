@@ -327,6 +327,7 @@ mod tests {
         assert!(!result.sql.contains("CODEC"));
         assert!(!result.sql.contains("TTL"));
         assert!(!result.sql.contains("SETTINGS"));
+        assert!(!result.sql.contains("index_granularity"));
         assert!(result.sql.contains("ENGINE = ReplicatedMergeTree"));
         assert!(result.sql.contains("ORDER BY"));
         assert_eq!(result.metadata.codecs.len(), 3);
@@ -335,6 +336,29 @@ mod tests {
             result.metadata.settings.get("index_granularity"),
             Some(&"8192".to_string())
         );
+    }
+
+    #[test]
+    fn test_ttl_followed_by_settings_keeps_no_body() {
+        let sql = "CREATE TABLE t (d Date) ENGINE = MergeTree ORDER BY d \
+                   TTL d + INTERVAL 7 DAY SETTINGS index_granularity = 4096";
+        let result = preprocess(sql);
+        assert!(!result.sql.contains("index_granularity"));
+        assert!(!result.sql.contains("SETTINGS"));
+        assert_eq!(
+            result.metadata.settings.get("index_granularity"),
+            Some(&"4096".to_string())
+        );
+    }
+
+    #[test]
+    fn test_sample_by_followed_by_settings() {
+        let sql = "CREATE TABLE t (id UInt64) ENGINE = MergeTree ORDER BY id \
+                   SAMPLE BY id SETTINGS index_granularity = 4096";
+        let result = preprocess(sql);
+        assert!(!result.sql.contains("SAMPLE"));
+        assert!(!result.sql.contains("index_granularity"));
+        assert_eq!(result.metadata.sample_by.len(), 1);
     }
 
     #[test]
