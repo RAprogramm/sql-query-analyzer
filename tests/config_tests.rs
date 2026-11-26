@@ -9,6 +9,14 @@ use std::{
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
+/// Acquire the environment lock, recovering if a panicking test poisoned it.
+/// The guarded data is the unit value, so recovery is always safe.
+fn env_guard() -> std::sync::MutexGuard<'static, ()> {
+    ENV_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 use sql_query_analyzer::config::{Config, RulesConfig};
 
 #[test]
@@ -80,7 +88,7 @@ fn test_retry_config_default() {
 
 #[test]
 fn test_config_load() {
-    let _guard = ENV_LOCK.lock().unwrap();
+    let _guard = env_guard();
     let result = Config::load();
     assert!(result.is_ok());
 }
@@ -147,7 +155,7 @@ fn test_rules_config_clone() {
 
 #[test]
 fn test_config_load_with_env_vars() {
-    let _guard = ENV_LOCK.lock().unwrap();
+    let _guard = env_guard();
     unsafe {
         set_var("LLM_API_KEY", "test-key-12345");
         set_var("LLM_PROVIDER", "openai");
@@ -185,7 +193,7 @@ fn with_home<T>(home: &std::path::Path, f: impl FnOnce() -> T) -> T {
 
 #[test]
 fn test_load_home_config_file() {
-    let _guard = ENV_LOCK.lock().unwrap();
+    let _guard = env_guard();
     let saved_model = var_os("LLM_MODEL");
     let saved_provider = var_os("LLM_PROVIDER");
     unsafe {
@@ -215,7 +223,7 @@ fn test_load_home_config_file() {
 
 #[test]
 fn test_load_invalid_home_config_errors() {
-    let _guard = ENV_LOCK.lock().unwrap();
+    let _guard = env_guard();
     let home = tempfile::tempdir().unwrap();
     let dir = home.path().join(".config").join("sql-analyzer");
     create_dir_all(&dir).unwrap();
@@ -226,7 +234,7 @@ fn test_load_invalid_home_config_errors() {
 
 #[test]
 fn test_load_local_config_file_valid_and_invalid() {
-    let _guard = ENV_LOCK.lock().unwrap();
+    let _guard = env_guard();
     let dir = tempfile::tempdir().unwrap();
     let local = dir.path().join(".sql-analyzer.toml");
     write(&local, "[rules]\ndisabled = [\"STYLE001\"]\n").unwrap();
