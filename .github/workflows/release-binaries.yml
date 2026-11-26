@@ -117,6 +117,7 @@ jobs:
           subject-path: sql-query-analyzer-${{ matrix.target }}.${{ matrix.archive }}
 
       - name: Attach archive to the release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
