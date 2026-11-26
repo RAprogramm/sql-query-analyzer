@@ -3,18 +3,99 @@
 
 use std::{
     env::{current_dir, remove_var, set_current_dir, set_var, var_os},
+    ffi::OsString,
     fs::{create_dir_all, write},
+    path::{Path, PathBuf},
     sync::Mutex
 };
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 /// Acquire the environment lock, recovering if a panicking test poisoned it.
-/// The guarded data is the unit value, so recovery is always safe.
+/// Recovery is safe only because every guarded test restores everything it
+/// changed through a drop guard ([`EnvRestore`], [`HomeGuard`], [`CwdGuard`]),
+/// which runs even when the test panics.
 fn env_guard() -> std::sync::MutexGuard<'static, ()> {
     ENV_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Restores the listed environment variables when the guard is dropped.
+/// Declare it after the lock guard so restoration runs before the lock is
+/// released, even when the test panics.
+struct EnvRestore {
+    saved: Vec<(&'static str, Option<OsString>)>
+}
+
+impl EnvRestore {
+    fn new(vars: &[&'static str]) -> Self {
+        Self {
+            saved: vars.iter().map(|name| (*name, var_os(name))).collect()
+        }
+    }
+}
+
+impl Drop for EnvRestore {
+    fn drop(&mut self) {
+        unsafe {
+            for (name, value) in &self.saved {
+                match value {
+                    Some(v) => set_var(name, v),
+                    None => remove_var(name)
+                }
+            }
+        }
+    }
+}
+
+/// Points `HOME` at a temporary directory and restores the previous value on
+/// drop, even when the wrapped closure panics.
+struct HomeGuard {
+    saved: Option<OsString>
+}
+
+impl HomeGuard {
+    fn new(home: &Path) -> Self {
+        let saved = var_os("HOME");
+        unsafe { set_var("HOME", home) };
+        Self {
+            saved
+        }
+    }
+}
+
+impl Drop for HomeGuard {
+    fn drop(&mut self) {
+        unsafe {
+            match &self.saved {
+                Some(v) => set_var("HOME", v),
+                None => remove_var("HOME")
+            }
+        }
+    }
+}
+
+/// Moves the process into `dir` and restores the previous directory on drop,
+/// even when the surrounding test panics.
+struct CwdGuard {
+    saved: PathBuf
+}
+
+impl CwdGuard {
+    fn to(dir: &Path) -> Self {
+        let saved = current_dir().expect("current directory is readable");
+        set_current_dir(dir).expect("test can change the working directory");
+        Self {
+            saved
+        }
+    }
+}
+
+impl Drop for CwdGuard {
+    fn drop(&mut self) {
+        let _ = set_current_dir(&self.saved);
+    }
 }
 
 use sql_query_analyzer::config::{Config, RulesConfig};
@@ -156,6 +237,7 @@ fn test_rules_config_clone() {
 #[test]
 fn test_config_load_with_env_vars() {
     let _guard = env_guard();
+    let _restore = EnvRestore::new(&["LLM_API_KEY", "LLM_PROVIDER", "LLM_MODEL", "OLLAMA_URL"]);
     unsafe {
         set_var("LLM_API_KEY", "test-key-12345");
         set_var("LLM_PROVIDER", "openai");
@@ -170,32 +252,17 @@ fn test_config_load_with_env_vars() {
         config.llm.ollama_url,
         Some("http://custom:11434".to_string())
     );
-    unsafe {
-        remove_var("LLM_API_KEY");
-        remove_var("LLM_PROVIDER");
-        remove_var("LLM_MODEL");
-        remove_var("OLLAMA_URL");
-    }
 }
 
 fn with_home<T>(home: &std::path::Path, f: impl FnOnce() -> T) -> T {
-    let saved = var_os("HOME");
-    unsafe { set_var("HOME", home) };
-    let result = f();
-    unsafe {
-        match saved {
-            Some(v) => set_var("HOME", v),
-            None => remove_var("HOME")
-        }
-    }
-    result
+    let _guard = HomeGuard::new(home);
+    f()
 }
 
 #[test]
 fn test_load_home_config_file() {
     let _guard = env_guard();
-    let saved_model = var_os("LLM_MODEL");
-    let saved_provider = var_os("LLM_PROVIDER");
+    let _restore = EnvRestore::new(&["LLM_MODEL", "LLM_PROVIDER"]);
     unsafe {
         remove_var("LLM_MODEL");
         remove_var("LLM_PROVIDER");
@@ -209,14 +276,6 @@ fn test_load_home_config_file() {
     )
     .unwrap();
     let config = with_home(home.path(), Config::load).unwrap();
-    unsafe {
-        if let Some(v) = saved_model {
-            set_var("LLM_MODEL", v);
-        }
-        if let Some(v) = saved_provider {
-            set_var("LLM_PROVIDER", v);
-        }
-    }
     assert_eq!(config.llm.provider, Some("home-provider".to_string()));
     assert_eq!(config.llm.model, Some("home-model".to_string()));
 }
@@ -238,12 +297,10 @@ fn test_load_local_config_file_valid_and_invalid() {
     let dir = tempfile::tempdir().unwrap();
     let local = dir.path().join(".sql-analyzer.toml");
     write(&local, "[rules]\ndisabled = [\"STYLE001\"]\n").unwrap();
-    let saved = current_dir().unwrap();
-    set_current_dir(dir.path()).unwrap();
+    let _cwd = CwdGuard::to(dir.path());
     let valid = Config::load();
     write(&local, "broken [").unwrap();
     let invalid = Config::load();
-    let _ = set_current_dir(saved);
     assert_eq!(valid.unwrap().rules.disabled, vec!["STYLE001".to_string()]);
     assert!(
         invalid
