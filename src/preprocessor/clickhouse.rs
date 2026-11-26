@@ -143,11 +143,16 @@ static MATERIALIZED_VIEW_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Regex for stripping the `ClickHouse` engine clause between a materialized
-/// view header and its `AS SELECT` body, so the statement becomes parseable.
-/// Group 1 keeps the header, group 3 keeps the `AS SELECT` keyword.
+/// view header and its query body, so the statement becomes parseable. The
+/// body starts at `AS SELECT` or `AS WITH ... SELECT`; the clause portion
+/// never crosses a `;`, so a view whose body starts with `AS WITH` cannot
+/// make the match run into a later statement. Group 1 keeps the header,
+/// group 3 keeps the body-start keyword.
 static MATERIALIZED_VIEW_ENGINE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?is)(\bCREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?[\w.]+(?:\s+TO\s+[\w.]+)?)(.*?)(\bAS\s+SELECT\b)")
-        .expect("valid regex")
+    Regex::new(
+        r"(?is)(\bCREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?[\w.]+(?:\s+TO\s+[\w.]+)?)([^;]*?)(\bAS\s+SELECT\b|\bAS\s+WITH\b)"
+    )
+    .expect("valid regex")
 });
 
 /// Regex for a `ClickHouse` `ALTER TABLE ... UPDATE ... WHERE ...` mutation.
@@ -739,6 +744,22 @@ mod tests {
         assert_eq!(mv.name, "mv");
         assert_eq!(mv.target.as_deref(), Some("dest"));
         assert!(mv.query.contains("SELECT a FROM src"));
+    }
+
+    #[test]
+    fn test_materialized_view_engine_strip_stays_in_statement() {
+        let sql = "CREATE MATERIALIZED VIEW mv1 ENGINE = MergeTree ORDER BY x \
+                   AS WITH s AS (SELECT 1 AS x) SELECT x FROM s; \
+                   CREATE TABLE between (y UInt64) ENGINE = MergeTree ORDER BY y; \
+                   CREATE MATERIALIZED VIEW mv2 ENGINE = MergeTree ORDER BY z \
+                   AS SELECT z FROM src";
+        let result = preprocess(sql);
+        assert!(result.sql.contains("CREATE TABLE between"));
+        assert!(result
+            .sql
+            .contains("AS WITH s AS (SELECT 1 AS x) SELECT x FROM s"));
+        assert!(result.sql.contains("AS SELECT z FROM src"));
+        assert_eq!(result.metadata.materialized_views.len(), 2);
     }
 
     #[test]
