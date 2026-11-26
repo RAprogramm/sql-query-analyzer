@@ -8,17 +8,35 @@
 use super::{Rule, RuleCategory, RuleInfo, Severity, Violation};
 use crate::{
     query::{Query, QueryType},
-    schema::{Schema, TableInfo}
+    schema::{Schema, TableInfo},
 };
 
-/// Returns the table in the schema whose name matches a query table reference,
-/// ignoring an optional database prefix and case.
+/// Returns the table in the schema whose name matches a query table reference.
+///
+/// A fully qualified reference (`db.table`) matches only a declaration with the
+/// same qualified name, so same-named tables in different databases stay
+/// distinct. A bare reference matches a qualified declaration only when exactly
+/// one table carries that bare name, mirroring how an unqualified query
+/// resolves against a single session database.
 fn find_table<'a>(schema: &'a Schema, name: &str) -> Option<&'a TableInfo> {
-    let bare = name.rsplit('.').next().unwrap_or(name);
-    schema
+    if let Some(exact) = schema
         .tables
         .values()
-        .find(|t| t.name.eq_ignore_ascii_case(bare))
+        .find(|t| t.name.eq_ignore_ascii_case(name))
+    {
+        return Some(exact);
+    }
+    if name.contains('.') {
+        return None;
+    }
+    let mut matches = schema.tables.values().filter(|t| {
+        t.name
+            .rsplit('.')
+            .next()
+            .is_some_and(|bare| bare.eq_ignore_ascii_case(name))
+    });
+    let first = matches.next()?;
+    matches.next().is_none().then_some(first)
 }
 
 /// Extracts bare identifiers from a `ClickHouse` expression such as
@@ -56,10 +74,10 @@ pub struct SelectStarWideTable;
 impl Rule for SelectStarWideTable {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH001",
-            name:     "SELECT * on columnar store",
+            id: "CH001",
+            name: "SELECT * on columnar store",
             severity: Severity::Info,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -89,16 +107,16 @@ impl Rule for SelectStarWideTable {
 
 /// WHERE clause does not touch the primary key, so no granules are pruned.
 pub struct FilterNotUsingPrimaryKey {
-    pub schema: Schema
+    pub schema: Schema,
 }
 
 impl Rule for FilterNotUsingPrimaryKey {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH002",
-            name:     "Filter does not use primary key",
+            id: "CH002",
+            name: "Filter does not use primary key",
             severity: Severity::Warning,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -133,9 +151,9 @@ impl Rule for FilterNotUsingPrimaryKey {
                     category: info.category,
                     suggestion: Some(
                         "Filter on a prefix of the ORDER BY key, or add a data skipping index"
-                            .to_string()
+                            .to_string(),
                     ),
-                    query_index
+                    query_index,
                 });
             }
         }
@@ -145,16 +163,16 @@ impl Rule for FilterNotUsingPrimaryKey {
 
 /// WHERE does not match the partition expression, so partitions are not pruned.
 pub struct PartitionPruningMissed {
-    pub schema: Schema
+    pub schema: Schema,
 }
 
 impl Rule for PartitionPruningMissed {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH003",
-            name:     "Partition pruning missed",
+            id: "CH003",
+            name: "Partition pruning missed",
             severity: Severity::Warning,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -212,16 +230,16 @@ const CH_DATE_FUNCTIONS: [&str; 11] = [
     "TOSTARTOFHOUR(",
     "TODAYOFWEEK(",
     "TODAYOFYEAR(",
-    "TOSTARTOFQUARTER("
+    "TOSTARTOFQUARTER(",
 ];
 
 impl Rule for FunctionOnKeyColumn {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH004",
-            name:     "Function on date column in WHERE",
+            id: "CH004",
+            name: "Function on date column in WHERE",
             severity: Severity::Warning,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -255,16 +273,16 @@ impl Rule for FunctionOnKeyColumn {
 
 /// WHERE column is neither in the sort key nor covered by a skipping index.
 pub struct MissingSkipIndex {
-    pub schema: Schema
+    pub schema: Schema,
 }
 
 impl Rule for MissingSkipIndex {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH005",
-            name:     "No skipping index for filter column",
+            id: "CH005",
+            name: "No skipping index for filter column",
             severity: Severity::Info,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -310,7 +328,7 @@ impl Rule for MissingSkipIndex {
 
 /// `LowCardinality` applied to a likely high-cardinality column.
 pub struct LowCardinalityHighCardinality {
-    pub schema: Schema
+    pub schema: Schema,
 }
 
 const HIGH_CARDINALITY_HINTS: [&str; 6] = ["ID", "UUID", "URL", "HASH", "TOKEN", "TRACE"];
@@ -318,10 +336,10 @@ const HIGH_CARDINALITY_HINTS: [&str; 6] = ["ID", "UUID", "URL", "HASH", "TOKEN",
 impl Rule for LowCardinalityHighCardinality {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH006",
-            name:     "LowCardinality on high-cardinality column",
+            id: "CH006",
+            name: "LowCardinality on high-cardinality column",
             severity: Severity::Info,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -366,16 +384,16 @@ impl Rule for LowCardinalityHighCardinality {
 
 /// Nullable column used in a hot filter path.
 pub struct NullableHotPath {
-    pub schema: Schema
+    pub schema: Schema,
 }
 
 impl Rule for NullableHotPath {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH007",
-            name:     "Nullable column in hot path",
+            id: "CH007",
+            name: "Nullable column in hot path",
             severity: Severity::Info,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -427,10 +445,10 @@ pub struct UniqExactUsage;
 impl Rule for UniqExactUsage {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH009",
-            name:     "uniqExact usage",
+            id: "CH009",
+            name: "uniqExact usage",
             severity: Severity::Info,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -447,9 +465,9 @@ impl Rule for UniqExactUsage {
             category: info.category,
             suggestion: Some(
                 "Use uniq() or uniqCombined() for approximate distinct counts in analytics"
-                    .to_string()
+                    .to_string(),
             ),
-            query_index
+            query_index,
         }]
     }
 }
@@ -460,10 +478,10 @@ pub struct CountIfOpportunity;
 impl Rule for CountIfOpportunity {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH010",
-            name:     "Conditional counts via subqueries",
+            id: "CH010",
+            name: "Conditional counts via subqueries",
             severity: Severity::Info,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -482,9 +500,9 @@ impl Rule for CountIfOpportunity {
             category: info.category,
             suggestion: Some(
                 "Use countIf(condition) columns in a single scan instead of separate subqueries"
-                    .to_string()
+                    .to_string(),
             ),
-            query_index
+            query_index,
         }]
     }
 }
@@ -495,10 +513,10 @@ pub struct OrderByInSubquery;
 impl Rule for OrderByInSubquery {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH011",
-            name:     "ORDER BY in subquery without LIMIT",
+            id: "CH011",
+            name: "ORDER BY in subquery without LIMIT",
             severity: Severity::Warning,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -517,9 +535,9 @@ impl Rule for OrderByInSubquery {
                 severity: info.severity,
                 category: info.category,
                 suggestion: Some(
-                    "Remove ORDER BY from the subquery unless it is paired with LIMIT".to_string()
+                    "Remove ORDER BY from the subquery unless it is paired with LIMIT".to_string(),
                 ),
-                query_index
+                query_index,
             }];
         }
         vec![]
@@ -528,16 +546,16 @@ impl Rule for OrderByInSubquery {
 
 /// GROUP BY order does not match the sort key, blocking stream aggregation.
 pub struct GroupByOrderMismatch {
-    pub schema: Schema
+    pub schema: Schema,
 }
 
 impl Rule for GroupByOrderMismatch {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH012",
-            name:     "GROUP BY does not match sort key",
+            id: "CH012",
+            name: "GROUP BY does not match sort key",
             severity: Severity::Info,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -590,10 +608,10 @@ pub struct JoinBigTables;
 impl Rule for JoinBigTables {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH016",
-            name:     "Multi-table JOIN",
+            id: "CH016",
+            name: "Multi-table JOIN",
             severity: Severity::Info,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -629,10 +647,10 @@ pub struct FinalUsage;
 impl Rule for FinalUsage {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH019",
-            name:     "FINAL modifier usage",
+            id: "CH019",
+            name: "FINAL modifier usage",
             severity: Severity::Warning,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -650,9 +668,9 @@ impl Rule for FinalUsage {
             category: info.category,
             suggestion: Some(
                 "Prefer argMax/argMin or ReplacingMergeTree with eventual merges over FINAL"
-                    .to_string()
+                    .to_string(),
             ),
-            query_index
+            query_index,
         }]
     }
 }
@@ -663,10 +681,10 @@ pub struct PrewhereOpportunity;
 impl Rule for PrewhereOpportunity {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH021",
-            name:     "PREWHERE opportunity",
+            id: "CH021",
+            name: "PREWHERE opportunity",
             severity: Severity::Info,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -700,10 +718,10 @@ pub struct HeavyMutation;
 impl Rule for HeavyMutation {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH022",
-            name:     "Heavy mutation (ALTER UPDATE/DELETE)",
+            id: "CH022",
+            name: "Heavy mutation (ALTER UPDATE/DELETE)",
             severity: Severity::Warning,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -734,10 +752,10 @@ pub struct ManualOptimizeFinal;
 impl Rule for ManualOptimizeFinal {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH023",
-            name:     "Manual OPTIMIZE FINAL",
+            id: "CH023",
+            name: "Manual OPTIMIZE FINAL",
             severity: Severity::Warning,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -765,16 +783,16 @@ impl Rule for ManualOptimizeFinal {
 
 /// A `JOIN` against a table that also exists as a dictionary can use a lookup.
 pub struct DictionaryLookupOpportunity {
-    pub schema: Schema
+    pub schema: Schema,
 }
 
 impl Rule for DictionaryLookupOpportunity {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH024",
-            name:     "Dictionary lookup opportunity",
+            id: "CH024",
+            name: "Dictionary lookup opportunity",
             severity: Severity::Info,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -814,16 +832,16 @@ impl Rule for DictionaryLookupOpportunity {
 
 /// `GROUP BY` on a plain `String` key wastes memory versus `LowCardinality`.
 pub struct GroupByStringKey {
-    pub schema: Schema
+    pub schema: Schema,
 }
 
 impl Rule for GroupByStringKey {
     fn info(&self) -> RuleInfo {
         RuleInfo {
-            id:       "CH025",
-            name:     "GROUP BY on plain String key",
+            id: "CH025",
+            name: "GROUP BY on plain String key",
             severity: Severity::Info,
-            category: RuleCategory::Performance
+            category: RuleCategory::Performance,
         }
     }
 
@@ -865,5 +883,50 @@ impl Rule for GroupByStringKey {
             }
         }
         violations
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::query::SqlDialect;
+
+    fn schema_with(ddl: &str) -> Schema {
+        Schema::parse(ddl, SqlDialect::ClickHouse).expect("test schema must parse")
+    }
+
+    #[test]
+    fn qualified_reference_matches_qualified_declaration() {
+        let schema =
+            schema_with("CREATE TABLE analytics.events (x UInt64) ENGINE = MergeTree ORDER BY x");
+        assert!(find_table(&schema, "analytics.events").is_some());
+    }
+
+    #[test]
+    fn qualified_reference_does_not_cross_databases() {
+        let schema =
+            schema_with("CREATE TABLE analytics.events (x UInt64) ENGINE = MergeTree ORDER BY x");
+        assert!(find_table(&schema, "logs.events").is_none());
+    }
+
+    #[test]
+    fn bare_reference_matches_unique_qualified_declaration() {
+        let schema =
+            schema_with("CREATE TABLE analytics.events (x UInt64) ENGINE = MergeTree ORDER BY x");
+        assert_eq!(
+            find_table(&schema, "events").map(|t| t.name.as_str()),
+            Some("analytics.events")
+        );
+    }
+
+    #[test]
+    fn bare_reference_is_ambiguous_across_databases() {
+        let schema = schema_with(
+            "CREATE TABLE analytics.events (x UInt64) ENGINE = MergeTree ORDER BY x; \
+             CREATE TABLE logs.events (y UInt64) ENGINE = MergeTree ORDER BY y"
+        );
+        assert!(find_table(&schema, "events").is_none());
+        assert!(find_table(&schema, "analytics.events").is_some());
+        assert!(find_table(&schema, "logs.events").is_some());
     }
 }
