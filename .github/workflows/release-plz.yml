@@ -13,10 +13,12 @@
 #   workflow_dispatch -> opt-in `release` (checkbox, off by default):
 #                      the only way anything reaches crates.io. A human
 #                      must merge the release PR AND explicitly run this
-#                      workflow; `release-plz release` then tags the
-#                      commit, publishes to crates.io, and creates the
-#                      GitHub release with the curated changelog as its
-#                      body. The command is idempotent.
+#                      workflow from `main`; `release-plz release` then
+#                      tags the commit, publishes to crates.io, and
+#                      creates the GitHub release with the curated
+#                      changelog as its body. The command is idempotent.
+#                      Dispatches from any other ref cannot publish: an
+#                      unmerged release branch must never reach crates.io.
 #
 # Authentication is via a dedicated GitHub App (`RELEASE_PLZ_APP_ID` +
 # `RELEASE_PLZ_APP_PRIVATE_KEY` repository secrets). The App identity is
@@ -94,7 +96,7 @@ jobs:
   publish:
     name: Publish merged release
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish && github.repository_owner == 'RAprogramm' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish && github.repository_owner == 'RAprogramm' && github.ref == 'refs/heads/main' }}
     timeout-minutes: 30
     steps:
       - name: Mint GitHub App token
