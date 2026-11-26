@@ -18,7 +18,9 @@
 #                      never reach crates.io. `release-plz release` then
 #                      tags the commit, publishes to crates.io, and
 #                      creates the GitHub release with the curated
-#                      changelog as its body. The command is idempotent.
+#                      changelog as its body. The command retries safely
+#                      only while nothing was published yet; for partial
+#                      failures see the recovery steps in `RELEASE.md`.
 #                      An optional `revision` input pins the exact merged
 #                      release commit to publish, so a later unrelated
 #                      merge on main cannot silently turn the publish into

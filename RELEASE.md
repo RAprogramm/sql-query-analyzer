@@ -72,10 +72,22 @@ Release-plz workflow_dispatch with `publish` checked  [human action 2]
         +--> Release attestations -- .crate + CycloneDX SBOM + provenance
 ```
 
-If a publish run fails partway, re-run the `Release-plz` workflow with
-`publish` checked — `release-plz release` is idempotent. Binary assets can
-be rebuilt for an existing tag via `workflow_dispatch` on `Release
-binaries`; attestations likewise on `Release attestations`.
+If a publish run fails partway, re-running `Release-plz` is only
+sufficient while nothing was published yet: `release-plz release` skips
+a version that already exists on crates.io and a tag that already
+exists, so the missing later effects are never created by a retry.
+Complete the missing steps by hand instead:
+
+1. Crate published, tag missing — tag the merged release commit and
+   push it: `git tag -a vX.Y.Z <release-revision> && git push origin vX.Y.Z`.
+2. Tag pushed, GitHub release missing — create it from the changelog
+   section: copy the `## [X.Y.Z]` section of `CHANGELOG.md` into a file
+   and run `gh release create vX.Y.Z --notes-file <section.md>`.
+3. In every partial state, re-attach the artefacts by dispatching
+   `Release binaries` and `Release attestations` with that tag.
+
+Binary assets can be rebuilt for an existing tag via `workflow_dispatch`
+on `Release binaries`; attestations likewise on `Release attestations`.
 
 ## One-time setup
 
