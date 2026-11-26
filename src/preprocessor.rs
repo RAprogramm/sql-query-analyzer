@@ -99,20 +99,25 @@ impl Preprocessor {
 /// Semicolons inside single-quoted strings, double-quoted identifiers,
 /// backtick identifiers, `--` line comments and block comments do not split.
 /// Doubled quotes escape inside their own quote kind for every dialect.
-/// `backslash_escapes` selects whether `\` escapes inside single and double
-/// quotes, matching the rules of the dialect being split (see
-/// [`SqlDialect::uses_backslash_escapes`]). Every split point is an ASCII
-/// byte, so each returned fragment is a valid `&str`. Empty and
-/// whitespace-only fragments are dropped.
+/// Dialect-specific rules follow [`SqlDialect`]: backslash escapes inside
+/// single and double quotes for [`SqlDialect::uses_backslash_escapes`]
+/// dialects, dollar-quoted literals for [`SqlDialect::uses_dollar_quotes`]
+/// dialects. Every split point is an ASCII byte, so each returned fragment is
+/// a valid `&str`. Empty and whitespace-only fragments are dropped.
 #[must_use]
-pub fn split_statements(sql: &str, backslash_escapes: bool) -> Vec<&str> {
+pub fn split_statements(sql: &str, dialect: SqlDialect) -> Vec<&str> {
     let bytes = sql.as_bytes();
     let mut statements = Vec::new();
     let mut start = 0;
     let mut index = 0;
     while index < bytes.len() {
         match bytes[index] {
-            b'\'' | b'"' | b'`' => index = skip_quoted(bytes, index, backslash_escapes),
+            b'\'' | b'"' | b'`' => {
+                index = skip_quoted(bytes, index, dialect.uses_backslash_escapes());
+            }
+            b'$' if dialect.uses_dollar_quotes() => {
+                index = skip_dollar_quoted(bytes, index).unwrap_or(index + 1);
+            }
             b'-' if bytes.get(index + 1) == Some(&b'-') => index = skip_line_comment(bytes, index),
             b'/' if bytes.get(index + 1) == Some(&b'*') => {
                 index = skip_block_comment(bytes, index);
@@ -149,6 +154,27 @@ fn skip_quoted(bytes: &[u8], open: usize, backslash_escapes: bool) -> usize {
         index += 1;
     }
     bytes.len()
+}
+
+/// Return the index just past the dollar-quoted literal starting at `open`,
+/// or `None` when `open` does not start a `$$` or `$tag$` delimiter.
+fn skip_dollar_quoted(bytes: &[u8], open: usize) -> Option<usize> {
+    let mut end = open + 1;
+    while end < bytes.len() && (bytes[end] == b'_' || bytes[end].is_ascii_alphanumeric()) {
+        end += 1;
+    }
+    if end >= bytes.len() || bytes[end] != b'$' {
+        return None;
+    }
+    let delimiter = &bytes[open..=end];
+    let mut index = end + 1;
+    while index + delimiter.len() <= bytes.len() {
+        if &bytes[index..index + delimiter.len()] == delimiter {
+            return Some(index + delimiter.len());
+        }
+        index += 1;
+    }
+    Some(bytes.len())
 }
 
 /// Return the index of the newline ending the `--` comment, or end of input.
@@ -206,30 +232,48 @@ mod tests {
     #[test]
     fn test_split_statements_basic_and_empty_fragments() {
         assert_eq!(
-            split_statements("SELECT 1; SELECT 2;", true),
+            split_statements("SELECT 1; SELECT 2;", SqlDialect::ClickHouse),
             vec!["SELECT 1", "SELECT 2"]
         );
-        assert_eq!(split_statements(";; SELECT 1 ;;", true), vec!["SELECT 1"]);
-        assert_eq!(split_statements("", true), Vec::<&str>::new());
-        assert_eq!(split_statements("   ;  \n ;", true), Vec::<&str>::new());
+        assert_eq!(
+            split_statements(";; SELECT 1 ;;", SqlDialect::ClickHouse),
+            vec!["SELECT 1"]
+        );
+        assert_eq!(
+            split_statements("", SqlDialect::ClickHouse),
+            Vec::<&str>::new()
+        );
+        assert_eq!(
+            split_statements("   ;  \n ;", SqlDialect::ClickHouse),
+            Vec::<&str>::new()
+        );
     }
 
     #[test]
     fn test_split_statements_keeps_semicolon_in_quotes() {
         assert_eq!(
-            split_statements("INSERT INTO t VALUES ('a;b'); SELECT \"c;d\" FROM t", true),
+            split_statements(
+                "INSERT INTO t VALUES ('a;b'); SELECT \"c;d\" FROM t",
+                SqlDialect::ClickHouse
+            ),
             vec!["INSERT INTO t VALUES ('a;b')", "SELECT \"c;d\" FROM t"]
         );
         assert_eq!(
-            split_statements("SELECT `e;f` FROM t; SELECT 2", true),
+            split_statements("SELECT `e;f` FROM t; SELECT 2", SqlDialect::ClickHouse),
             vec!["SELECT `e;f` FROM t", "SELECT 2"]
         );
         assert_eq!(
-            split_statements("INSERT INTO t VALUES ('it''s; ok'); SELECT 2", true),
+            split_statements(
+                "INSERT INTO t VALUES ('it''s; ok'); SELECT 2",
+                SqlDialect::ClickHouse
+            ),
             vec!["INSERT INTO t VALUES ('it''s; ok')", "SELECT 2"]
         );
         assert_eq!(
-            split_statements("INSERT INTO t VALUES ('it\\'s; ok'); SELECT 2", true),
+            split_statements(
+                "INSERT INTO t VALUES ('it\\'s; ok'); SELECT 2",
+                SqlDialect::ClickHouse
+            ),
             vec!["INSERT INTO t VALUES ('it\\'s; ok')", "SELECT 2"]
         );
     }
@@ -238,25 +282,53 @@ mod tests {
     fn test_split_statements_backslash_escapes_follow_dialect() {
         let sql = "INSERT INTO t VALUES ('C:\\'); INSERT INTO u VALUES ('a;b')";
         assert_eq!(
-            split_statements(sql, false),
+            split_statements(sql, SqlDialect::PostgreSQL),
             vec![
                 "INSERT INTO t VALUES ('C:\\')",
                 "INSERT INTO u VALUES ('a;b')"
             ]
         );
-        let escaped = split_statements(sql, true);
+        let escaped = split_statements(sql, SqlDialect::ClickHouse);
         assert_eq!(escaped.len(), 2);
         assert!(escaped[0].contains("INSERT INTO u"), "{escaped:?}");
     }
 
     #[test]
+    fn test_split_statements_keeps_semicolon_in_dollar_quotes() {
+        assert_eq!(
+            split_statements(
+                "CREATE TABLE t (s TEXT DEFAULT $$a;b$$); SELECT 1",
+                SqlDialect::PostgreSQL
+            ),
+            vec!["CREATE TABLE t (s TEXT DEFAULT $$a;b$$)", "SELECT 1"]
+        );
+        assert_eq!(
+            split_statements(
+                "CREATE FUNCTION f() AS $body$ SELECT 1; 2 $body$; SELECT 3",
+                SqlDialect::PostgreSQL
+            ),
+            vec![
+                "CREATE FUNCTION f() AS $body$ SELECT 1; 2 $body$",
+                "SELECT 3"
+            ]
+        );
+        assert_eq!(
+            split_statements("SELECT $1; SELECT 2", SqlDialect::PostgreSQL),
+            vec!["SELECT $1", "SELECT 2"]
+        );
+    }
+
+    #[test]
     fn test_split_statements_keeps_semicolon_in_comments() {
         assert_eq!(
-            split_statements("SELECT 1 -- trailing ; note\n; SELECT 2", true),
+            split_statements(
+                "SELECT 1 -- trailing ; note\n; SELECT 2",
+                SqlDialect::ClickHouse
+            ),
             vec!["SELECT 1 -- trailing ; note", "SELECT 2"]
         );
         assert_eq!(
-            split_statements("SELECT /* ; */ 1; SELECT 2", true),
+            split_statements("SELECT /* ; */ 1; SELECT 2", SqlDialect::ClickHouse),
             vec!["SELECT /* ; */ 1", "SELECT 2"]
         );
     }
@@ -264,7 +336,7 @@ mod tests {
     #[test]
     fn test_split_statements_multibyte_is_safe() {
         assert_eq!(
-            split_statements("SELECT 'ёжик;'; SELECT \"лош;адь\"", true),
+            split_statements("SELECT 'ёжик;'; SELECT \"лош;адь\"", SqlDialect::ClickHouse),
             vec!["SELECT 'ёжик;'", "SELECT \"лош;адь\""]
         );
     }

@@ -44,6 +44,13 @@ impl SqlDialect {
         matches!(self, Self::MySQL | Self::ClickHouse)
     }
 
+    /// Whether string literals may be written as dollar-quoted blocks
+    /// (`$$text$$` or `$tag$text$tag$`).
+    #[must_use]
+    pub const fn uses_dollar_quotes(self) -> bool {
+        matches!(self, Self::PostgreSQL)
+    }
+
     /// Convert to sqlparser dialect for parsing
     #[must_use]
     pub fn into_parser_dialect(self) -> Box<dyn Dialect> {
