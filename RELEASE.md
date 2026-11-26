@@ -8,24 +8,21 @@ SPDX-License-Identifier: MIT
 Releases of `sql_query_analyzer` are driven by [release-plz][rplz].
 Conventional commits land on `main`; release-plz reads them and opens (or
 updates) a "release PR" that bumps `Cargo.toml` and prepends a section to
-`CHANGELOG.md`. That is all the automatic path ever does — **the workflow
-never publishes anything by itself**.
-
-Publishing requires two deliberate human actions:
-
-1. **merge the release PR** — the reviewed changelog lands on `main`;
-2. **run the `Release-plz` workflow manually** (`workflow_dispatch`) with
-   the `publish` checkbox enabled — only then does `release-plz release`
-   tag the commit, publish to crates.io, and create the GitHub release.
+`CHANGELOG.md`. Merging that PR is the only human action a release needs:
+the push it produces runs `release-plz release`, which tags the commit,
+publishes to crates.io, and creates the GitHub release.
 
 `release_always = false` in `release-plz.toml` makes the `release`
 command act only on commits that belong to a merged `release-plz-*`
-branch, so even a manual run cannot publish a version that never came
-through a reviewed release PR. Feature PRs never bump the version:
-release-plz computes every bump itself in its release PR, and the
-`Semver Checks` gate runs only on that PR, where the version is already
-bumped. Publish promptly after merging: until the publish run tags the
-version, `release-pr` keeps the release PR open for that same version.
+branch, so a push that is not a merged release PR publishes nothing.
+Feature PRs never bump the version: release-plz computes every bump
+itself in its release PR, and the `Semver Checks` gate runs only on that
+PR, where the version is already bumped.
+
+If a publish run fails, re-run the `Release-plz` workflow from `main`
+(`workflow_dispatch`): `release-plz release` is idempotent, so a re-run
+is always safe. See "Recovering a partial release" below for the case
+where some of the effects were already produced.
 
 [rplz]: https://release-plz.dev
 
@@ -55,24 +52,27 @@ conventional commit on main
         |
         v
 Release-plz workflow (on push to main)
-   `release-pr` only -- opens or updates the single open release PR;
-   nothing is tagged, nothing is published
+   `release` -- publishes only if the pushed commit belongs to a merged
+                release PR, otherwise a no-op
+   `release-pr` -- opens or updates the single open release PR
         |
         v
 release PR -- Cargo.toml bump + CHANGELOG.md section (label: release)
         |
         v  (maintainer reviews, CI runs, semver gate passes)
-merge  [human action 1]
+merge  [the only human action]
         |
         v
-Release-plz workflow_dispatch with `publish` checked  [human action 2]
+Release-plz workflow (push produced by the merge)
    `release` publishes to crates.io, tags vX.Y.Z, creates the GitHub release
         |
         +--> Release binaries    -- per-platform archives + provenance
         +--> Release attestations -- .crate + CycloneDX SBOM + provenance
 ```
 
-If a publish run fails partway, re-running `Release-plz` is only
+## Recovering a partial release
+
+If a publish run fails partway, re-running `Release-plz` from `main` is
 sufficient while nothing was published yet: `release-plz release` skips
 a version that already exists on crates.io and a tag that already
 exists, so the missing later effects are never created by a retry.
