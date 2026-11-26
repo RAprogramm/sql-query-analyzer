@@ -5,6 +5,184 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0](https://github.com/RAprogramm/sql-query-analyzer/compare/v0.16.0...v0.17.0) - 2026-11-26
+
+### Added
+
+- Support configurable base_url for OpenAI and Anthropic providers ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Add ClickHouse rules CH021-CH025 and rewrite ALTER mutations for parsing ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Parse ClickHouse projections, dictionaries, and materialized views ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Dialect-aware LLM prompt with ClickHouse guidance ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Add dialect-aware RuleRunner and ClickHouse best-practice rules ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Enrich ClickHouse query metadata (PREWHERE/FINAL/TOTALS/FILL) ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Add ClickHouse SAMPLE BY metadata extraction ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Store ClickHouse partition/ttl/settings/skip-index metadata in schema ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+
+### Build
+
+- Defer version bumps to release-plz release PRs ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+
+### CI/CD
+
+- Bump pinned actions to latest stable releases ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Add Dependabot cooldown and security policy ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Make the release-plz workflow create its release label ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Add divan benchmarks and CodSpeed performance tracking ([#149](https://github.com/RAprogramm/sql-query-analyzer/pull/149))
+
+
+### Changed
+
+- Pass project lint and format gates on perf fix ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Resolve all clippy pedantic/nursery warnings ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+
+### Dependencies
+
+- Bump the rust-dependencies group with 3 updates ([#147](https://github.com/RAprogramm/sql-query-analyzer/issues/147)) ([#147](https://github.com/RAprogramm/sql-query-analyzer/pull/147))
+
+- Bump the rust-dependencies group with 3 updates ([#144](https://github.com/RAprogramm/sql-query-analyzer/issues/144)) ([#144](https://github.com/RAprogramm/sql-query-analyzer/pull/144))
+
+- Bump toml ([#142](https://github.com/RAprogramm/sql-query-analyzer/issues/142)) ([#142](https://github.com/RAprogramm/sql-query-analyzer/pull/142))
+
+- Bump rustls from 0.23.42 to 0.23.43 ([#140](https://github.com/RAprogramm/sql-query-analyzer/issues/140)) ([#140](https://github.com/RAprogramm/sql-query-analyzer/pull/140))
+
+- Bump smallvec from 1.16.3 to 1.16.4 in the rust-dependencies group ([#139](https://github.com/RAprogramm/sql-query-analyzer/issues/139)) ([#139](https://github.com/RAprogramm/sql-query-analyzer/pull/139))
+
+- Bump tokio from 1.53.3 to 1.54.1 in the rust-dependencies group ([#137](https://github.com/RAprogramm/sql-query-analyzer/issues/137)) ([#137](https://github.com/RAprogramm/sql-query-analyzer/pull/137))
+
+- Bump the rust-dependencies group with 3 updates ([#135](https://github.com/RAprogramm/sql-query-analyzer/issues/135)) ([#135](https://github.com/RAprogramm/sql-query-analyzer/pull/135))
+
+- Bump the rust-dependencies group with 2 updates ([#133](https://github.com/RAprogramm/sql-query-analyzer/issues/133)) ([#133](https://github.com/RAprogramm/sql-query-analyzer/pull/133))
+
+- Bump smallvec from 1.16.1 to 1.16.2 in the rust-dependencies group ([#130](https://github.com/RAprogramm/sql-query-analyzer/issues/130)) ([#130](https://github.com/RAprogramm/sql-query-analyzer/pull/130))
+
+- Bump the rust-dependencies group with 3 updates ([#128](https://github.com/RAprogramm/sql-query-analyzer/issues/128)) ([#128](https://github.com/RAprogramm/sql-query-analyzer/pull/128))
+
+- Bump the rust-dependencies group with 3 updates ([#126](https://github.com/RAprogramm/sql-query-analyzer/issues/126)) ([#126](https://github.com/RAprogramm/sql-query-analyzer/pull/126))
+
+- Bump the rust-dependencies group with 3 updates ([#124](https://github.com/RAprogramm/sql-query-analyzer/issues/124)) ([#124](https://github.com/RAprogramm/sql-query-analyzer/pull/124))
+
+- Bump clap from 4.6.4 to 4.6.6 in the rust-dependencies group ([#119](https://github.com/RAprogramm/sql-query-analyzer/issues/119)) ([#119](https://github.com/RAprogramm/sql-query-analyzer/pull/119))
+
+- Bump toml in the rust-dependencies group ([#117](https://github.com/RAprogramm/sql-query-analyzer/issues/117)) ([#117](https://github.com/RAprogramm/sql-query-analyzer/pull/117))
+
+- Bump the rust-dependencies group with 2 updates ([#115](https://github.com/RAprogramm/sql-query-analyzer/issues/115)) ([#115](https://github.com/RAprogramm/sql-query-analyzer/pull/115))
+
+- Bump the rust-dependencies group with 6 updates ([#113](https://github.com/RAprogramm/sql-query-analyzer/issues/113)) ([#113](https://github.com/RAprogramm/sql-query-analyzer/pull/113))
+
+
+### Documentation
+
+- Use the archive member path when reading cargo vcs info ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Tag the packaged revision when completing a partial release ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Use the integer form of backoff_factor in configuration examples ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Describe recovery from a partially published release ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Add CodeRabbit review badge ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Document CH021-CH025 rules and ClickHouse projections/dictionaries/views ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Document ClickHouse rules, schema metadata, and dialect-aware runner ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Update changelog [skip ci] ([1dbccda](https://github.com/RAprogramm/sql-query-analyzer/commit/1dbccdaf74b3defd53ded96c85fab852782d5e77))
+
+
+### Fixed
+
+- Track nested block comments for dialects that nest them ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Preserve backslash escapes in PostgreSQL escape-string literals ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Keep dollar-quoted literals intact when splitting statements ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Apply backslash escapes in split_statements only for dialects that use them ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Serialize environment-mutating config tests with a shared lock ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Keep preprocessor metadata scoped to its own table ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Match qualified table references against qualified schema names ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Bound materialized-view engine stripping to one statement ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Keep projection-name scanning on UTF-8 boundaries ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Start nested YAML mappings and sequences on a new line ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Resolve rustdoc broken links and cargo-qual findings ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Eliminate template injection and pin SARIF uploader in composite action ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Update rustls to 0.23.46 to address TLS security advisories ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Correct release-plz semver cadence and changelog rendering ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Adapt IN expression matching to sqlparser 0.64 Expr::In ([#149](https://github.com/RAprogramm/sql-query-analyzer/pull/149))
+
+- Accept base_url with or without /v1 for OpenAI-compatible servers ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Replace unmaintained serde_yaml with dependency-free YAML emitter ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Keep SETTINGS terminator when stripping TTL/SAMPLE BY and honor ClickHouse Nullable ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Skip OLTP index-suggestion schema rules for ClickHouse dialect ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Adapt query extractor to sqlparser 0.64 In/InTarget API ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+
+### Miscellaneous
+
+- Ignore agent configs, fuzz artifacts and coverage output ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Bump version to 0.17.0 to satisfy the semver gate ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Up deps ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Drive releases with release-plz ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Drop unused sample-expression stub in ClickHouse enrichment ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Up deps ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+
+### Performance
+
+- Skip ClickHouse clause regexes when their keyword is absent ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Cut per-call allocations in ClickHouse preprocessing ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+
+### Testing
+
+- Restore the test environment through drop guards ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Recover the environment lock after a panicking test ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Round-trip YAML output through a real parser ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Cover LLM prompt/retry/Ollama path and YAML emitter branches ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- Regression for SETTINGS-after-TTL leak and ClickHouse Nullable ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+- ClickHouse rule coverage and derived-table subquery detection ([#150](https://github.com/RAprogramm/sql-query-analyzer/pull/150))
+
+
 ## [0.15.0] - 2026-07-14
 
 ### Added
