@@ -19,13 +19,12 @@ publish = true
 publish_allow_dirty = false
 release = true
 # Publish only when the pushed commit belongs to a release PR (a branch
-# named `release-plz-*`). Without this, `release-plz release` publishes on
-# ANY push where Cargo.toml is ahead of crates.io — a feature PR that bumps
-# the version manually (breaking changes must, to satisfy the semver gate)
-# would ship straight to crates.io with no curated CHANGELOG section and
-# wrong release notes. With `release_always = false` such a merge instead
-# flows into the next release PR, and publishing happens only when that PR
-# merges.
+# named `release-plz-*`). Feature PRs never touch the version — release-plz
+# computes every bump itself in its release PR. Without this, `release-plz
+# release` would publish on ANY push where Cargo.toml is ahead of crates.io,
+# skipping the curated CHANGELOG section and release notes; with
+# `release_always = false` a feature merge instead flows into the next
+# release PR, and publishing happens only when that PR merges.
 release_always = false
 # The repository history releases every batch of new rules as a minor
 # (0.14 -> 0.15 -> 0.16), so a `feat:` commit must bump the minor already
@@ -33,8 +32,9 @@ release_always = false
 # until 1.0), which contradicts the established cadence.
 features_always_increment_minor = true
 # The semver gate lives in the repository CI (`Semver Checks` job of
-# `ci.yml`, workflow `_semver.yml`), which always runs the fresh upstream
-# cargo-semver-checks. The version bundled into release-plz lags the stable
+# `ci.yml`, workflow `_semver.yml`), which runs the fresh upstream
+# cargo-semver-checks and only on `release-plz-*` PRs, where the version
+# is already bumped. The version bundled into release-plz lags the stable
 # rustdoc JSON format and cannot parse its output, so the bundled check is
 # disabled here rather than duplicating a broken copy of the gate.
 semver_check = false

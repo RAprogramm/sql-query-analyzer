@@ -127,7 +127,7 @@ jobs:
 
   semver:
     needs: detect
-    if: always() && needs.detect.result == 'success' && github.event_name == 'pull_request' && needs.detect.outputs.rust == 'true'
+    if: always() && needs.detect.result == 'success' && github.event_name == 'pull_request' && needs.detect.outputs.rust == 'true' && startsWith(github.head_ref, 'release-plz-')
     uses: ./.github/workflows/_semver.yml
     with:
       rust_changed: ${{ needs.detect.outputs.rust }}

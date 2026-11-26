@@ -21,12 +21,11 @@ Publishing requires two deliberate human actions:
 `release_always = false` in `release-plz.toml` makes the `release`
 command act only on commits that belong to a merged `release-plz-*`
 branch, so even a manual run cannot publish a version that never came
-through a reviewed release PR. A feature PR that bumps the version
-manually (breaking changes must, to satisfy the `Semver Checks` gate)
-does not publish on merge either — the bumped, unpublished version simply
-flows into the next release PR. Publish promptly after merging: until the
-publish run tags the version, `release-pr` keeps the release PR open for
-that same version.
+through a reviewed release PR. Feature PRs never bump the version:
+release-plz computes every bump itself in its release PR, and the
+`Semver Checks` gate runs only on that PR, where the version is already
+bumped. Publish promptly after merging: until the publish run tags the
+version, `release-pr` keeps the release PR open for that same version.
 
 [rplz]: https://release-plz.dev
 
