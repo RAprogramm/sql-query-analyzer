@@ -51,6 +51,12 @@ impl SqlDialect {
         matches!(self, Self::PostgreSQL)
     }
 
+    /// Whether block comments nest (`/* outer /* inner */ still comment */`).
+    #[must_use]
+    pub const fn uses_nested_block_comments(self) -> bool {
+        matches!(self, Self::PostgreSQL)
+    }
+
     /// Convert to sqlparser dialect for parsing
     #[must_use]
     pub fn into_parser_dialect(self) -> Box<dyn Dialect> {

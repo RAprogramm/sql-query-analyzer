@@ -103,9 +103,10 @@ impl Preprocessor {
 /// single and double quotes for [`SqlDialect::uses_backslash_escapes`]
 /// dialects, backslash escapes only inside `E'...'` literals for
 /// `PostgreSQL`, dollar-quoted literals for
-/// [`SqlDialect::uses_dollar_quotes`] dialects. Every split point is an
-/// ASCII byte, so each returned fragment is a valid `&str`. Empty and
-/// whitespace-only fragments are dropped.
+/// [`SqlDialect::uses_dollar_quotes`] dialects, and nested block comments
+/// for [`SqlDialect::uses_nested_block_comments`] dialects. Every split
+/// point is an ASCII byte, so each returned fragment is a valid `&str`.
+/// Empty and whitespace-only fragments are dropped.
 #[must_use]
 pub fn split_statements(sql: &str, dialect: SqlDialect) -> Vec<&str> {
     let bytes = sql.as_bytes();
@@ -125,7 +126,7 @@ pub fn split_statements(sql: &str, dialect: SqlDialect) -> Vec<&str> {
             }
             b'-' if bytes.get(index + 1) == Some(&b'-') => index = skip_line_comment(bytes, index),
             b'/' if bytes.get(index + 1) == Some(&b'*') => {
-                index = skip_block_comment(bytes, index);
+                index = skip_block_comment(bytes, index, dialect.uses_nested_block_comments());
             }
             b';' => {
                 push_fragment(&mut statements, &sql[start..index]);
@@ -206,13 +207,32 @@ fn skip_line_comment(bytes: &[u8], start: usize) -> usize {
         .map_or(bytes.len(), |offset| start + offset)
 }
 
-/// Return the index just past the `*/` ending the block comment.
-fn skip_block_comment(bytes: &[u8], start: usize) -> usize {
-    let search_from = (start + 2).min(bytes.len());
-    bytes[search_from..]
-        .windows(2)
-        .position(|window| window == b"*/")
-        .map_or(bytes.len(), |offset| search_from + offset + 2)
+/// Return the index just past the `*/` ending the block comment. With
+/// `nested`, `/*` sequences inside the comment increase its depth, matching
+/// dialects such as `PostgreSQL` that nest block comments; otherwise the
+/// first `*/` terminates it.
+fn skip_block_comment(bytes: &[u8], start: usize, nested: bool) -> usize {
+    let mut index = (start + 2).min(bytes.len());
+    let mut depth = 1usize;
+    while index < bytes.len() {
+        if bytes[index] == b'/' && bytes.get(index + 1) == Some(&b'*') {
+            if nested {
+                depth += 1;
+            }
+            index += 2;
+            continue;
+        }
+        if bytes[index] == b'*' && bytes.get(index + 1) == Some(&b'/') {
+            depth -= 1;
+            if depth == 0 {
+                return index + 2;
+            }
+            index += 2;
+            continue;
+        }
+        index += 1;
+    }
+    bytes.len()
 }
 
 /// Trim a fragment and push it unless it is empty.
@@ -376,6 +396,19 @@ mod tests {
         assert_eq!(
             split_statements("SELECT /* ; */ 1; SELECT 2", SqlDialect::ClickHouse),
             vec!["SELECT /* ; */ 1", "SELECT 2"]
+        );
+    }
+
+    #[test]
+    fn test_split_statements_nested_block_comments_follow_dialect() {
+        let sql = "/* outer /* inner */ ; outer */ SELECT 1; SELECT 2";
+        assert_eq!(
+            split_statements(sql, SqlDialect::PostgreSQL),
+            vec!["/* outer /* inner */ ; outer */ SELECT 1", "SELECT 2"]
+        );
+        assert_eq!(
+            split_statements(sql, SqlDialect::MySQL),
+            vec!["/* outer /* inner */", "outer */ SELECT 1", "SELECT 2"]
         );
     }
 
