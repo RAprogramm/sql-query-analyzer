@@ -101,9 +101,11 @@ impl Preprocessor {
 /// Doubled quotes escape inside their own quote kind for every dialect.
 /// Dialect-specific rules follow [`SqlDialect`]: backslash escapes inside
 /// single and double quotes for [`SqlDialect::uses_backslash_escapes`]
-/// dialects, dollar-quoted literals for [`SqlDialect::uses_dollar_quotes`]
-/// dialects. Every split point is an ASCII byte, so each returned fragment is
-/// a valid `&str`. Empty and whitespace-only fragments are dropped.
+/// dialects, backslash escapes only inside `E'...'` literals for
+/// `PostgreSQL`, dollar-quoted literals for
+/// [`SqlDialect::uses_dollar_quotes`] dialects. Every split point is an
+/// ASCII byte, so each returned fragment is a valid `&str`. Empty and
+/// whitespace-only fragments are dropped.
 #[must_use]
 pub fn split_statements(sql: &str, dialect: SqlDialect) -> Vec<&str> {
     let bytes = sql.as_bytes();
@@ -113,7 +115,10 @@ pub fn split_statements(sql: &str, dialect: SqlDialect) -> Vec<&str> {
     while index < bytes.len() {
         match bytes[index] {
             b'\'' | b'"' | b'`' => {
-                index = skip_quoted(bytes, index, dialect.uses_backslash_escapes());
+                let backslash = dialect.uses_backslash_escapes()
+                    || (dialect == SqlDialect::PostgreSQL
+                        && is_postgres_escape_string(bytes, index));
+                index = skip_quoted(bytes, index, backslash);
             }
             b'$' if dialect.uses_dollar_quotes() => {
                 index = skip_dollar_quoted(bytes, index).unwrap_or(index + 1);
@@ -154,6 +159,22 @@ fn skip_quoted(bytes: &[u8], open: usize, backslash_escapes: bool) -> usize {
         index += 1;
     }
     bytes.len()
+}
+
+/// Return whether the quote at `open` starts a PostgreSQL escape string
+/// (`E'...'` or `e'...'`), the one literal form in which PostgreSQL honours
+/// backslash escapes.
+fn is_postgres_escape_string(bytes: &[u8], open: usize) -> bool {
+    let Some(prefix_index) = open.checked_sub(1) else {
+        return false;
+    };
+    let Some(&prefix) = bytes.get(prefix_index) else {
+        return false;
+    };
+    (prefix == b'E' || prefix == b'e')
+        && !prefix_index
+            .checked_sub(1)
+            .is_some_and(|i| bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_')
 }
 
 /// Return the index just past the dollar-quoted literal starting at `open`,
@@ -291,6 +312,31 @@ mod tests {
         let escaped = split_statements(sql, SqlDialect::ClickHouse);
         assert_eq!(escaped.len(), 2);
         assert!(escaped[0].contains("INSERT INTO u"), "{escaped:?}");
+    }
+
+    #[test]
+    fn test_split_statements_keeps_semicolon_in_postgres_escape_string() {
+        assert_eq!(
+            split_statements(
+                "CREATE TABLE t (s TEXT DEFAULT E'it\\'s;ok'); SELECT 1",
+                SqlDialect::PostgreSQL
+            ),
+            vec!["CREATE TABLE t (s TEXT DEFAULT E'it\\'s;ok')", "SELECT 1"]
+        );
+        assert_eq!(
+            split_statements(
+                "CREATE TABLE t (s TEXT DEFAULT e'a\\b;'); SELECT 1",
+                SqlDialect::PostgreSQL
+            ),
+            vec!["CREATE TABLE t (s TEXT DEFAULT e'a\\b;')", "SELECT 1"]
+        );
+        assert_eq!(
+            split_statements(
+                "SELECT name FROM t WHERE x = value'a;b'; SELECT 2",
+                SqlDialect::PostgreSQL
+            ),
+            vec!["SELECT name FROM t WHERE x = value'a;b'", "SELECT 2"]
+        );
     }
 
     #[test]
