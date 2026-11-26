@@ -299,11 +299,10 @@ impl RuleRunner {
                     schema.clone()
                 )),
                 Box::new(schema_aware::SuggestIndex::new(schema.clone())),
-                Box::new(schema_aware::JoinOnNonIndexedColumn::new(schema.clone())),
+                Box::new(schema_aware::JoinOnNonIndexedColumn::new(schema)),
             ];
             schema_rules.extend(oltp_rules);
-        }
-        if dialect == SqlDialect::ClickHouse {
+        } else {
             let ch_schema_rules: Vec<Box<dyn Rule>> = vec![
                 Box::new(clickhouse::FilterNotUsingPrimaryKey {
                     schema: schema.clone()

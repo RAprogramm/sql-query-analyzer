@@ -169,6 +169,9 @@ static MUTATION_DELETE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 /// which the parser rejects. Rewriting them to the standard form keeps the
 /// statement analysable (and lets the mutation rule flag it).
 pub fn rewrite_mutations(sql: &str) -> String {
+    if !contains_keyword(sql, b"ALTER") {
+        return sql.to_owned();
+    }
     let step = MUTATION_UPDATE_REGEX.replace_all(sql, "UPDATE ${1} SET ${2} WHERE ${3}${4}");
     MUTATION_DELETE_REGEX
         .replace_all(&step, "DELETE FROM ${1} WHERE ${2}${3}")
@@ -180,25 +183,47 @@ pub fn rewrite_mutations(sql: &str) -> String {
 /// Removes unsupported constructs and extracts metadata.
 #[must_use]
 pub fn preprocess(sql: &str) -> PreprocessorResult {
+    // Each clause regex is only compiled and run when its keyword appears:
+    // compiling these regexes costs far more than scanning the input.
     let mut metadata = PreprocessorMetadata::default();
     extract_codecs(sql, &mut metadata);
-    extract_ttl(sql, &mut metadata);
+    if contains_keyword(sql, b"TTL") {
+        extract_ttl(sql, &mut metadata);
+    }
     extract_settings(sql, &mut metadata);
     extract_partition_by(sql, &mut metadata);
-    extract_sample_by(sql, &mut metadata);
-    extract_skip_indexes(sql, &mut metadata);
+    if contains_keyword(sql, b"SAMPLE") {
+        extract_sample_by(sql, &mut metadata);
+    }
+    if contains_keyword(sql, b"INDEX") {
+        extract_skip_indexes(sql, &mut metadata);
+    }
     extract_projections(sql, &mut metadata);
-    extract_dictionaries(sql, &mut metadata);
-    extract_materialized_views(sql, &mut metadata);
+    if contains_keyword(sql, b"DICTIONARY") {
+        extract_dictionaries(sql, &mut metadata);
+    }
+    if contains_keyword(sql, b"VIEW") {
+        extract_materialized_views(sql, &mut metadata);
+    }
     let mut result = remove_codecs(sql);
-    result = remove_ttl(&result);
+    if contains_keyword(&result, b"TTL") {
+        result = remove_ttl(&result);
+    }
     result = remove_settings(&result);
     result = remove_partition_by(&result);
-    result = remove_sample_by(&result);
-    result = remove_skip_indexes(&result);
+    if contains_keyword(&result, b"SAMPLE") {
+        result = remove_sample_by(&result);
+    }
+    if contains_keyword(&result, b"INDEX") {
+        result = remove_skip_indexes(&result);
+    }
     result = remove_projections(&result);
-    result = remove_dictionaries(&result);
-    result = remove_materialized_view_engine(&result);
+    if contains_keyword(&result, b"DICTIONARY") {
+        result = remove_dictionaries(&result);
+    }
+    if contains_keyword(&result, b"VIEW") {
+        result = remove_materialized_view_engine(&result);
+    }
     result = normalize_whitespace(&result);
     PreprocessorResult {
         sql: result,
@@ -536,6 +561,27 @@ fn find_keyword_ignore_case(haystack: &[u8], needle: &[u8], from: usize) -> Opti
     })
 }
 
+/// Whether `keyword` occurs in `sql` as a whole ASCII word, ignoring case.
+///
+/// Used as a cheap pre-check before running a clause regex. A non-ASCII
+/// neighbour counts as a word boundary, so this never rejects input that the
+/// matching `\bKEYWORD\s` regex would accept.
+fn contains_keyword(sql: &str, keyword: &[u8]) -> bool {
+    let bytes = sql.as_bytes();
+    let is_word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let mut from = 0;
+    while let Some(start) = find_keyword_ignore_case(bytes, keyword, from) {
+        let end = start + keyword.len();
+        let before_ok = start == 0 || !is_word(bytes[start - 1]);
+        let after_ok = end == bytes.len() || !is_word(bytes[end]);
+        if before_ok && after_ok {
+            return true;
+        }
+        from = start + 1;
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -708,6 +754,20 @@ mod tests {
         assert_eq!(upd, "UPDATE t SET x = 0 WHERE d = today()");
         let del = rewrite_mutations("ALTER TABLE t DELETE WHERE d = today();");
         assert_eq!(del, "DELETE FROM t WHERE d = today();");
+    }
+
+    #[test]
+    fn test_contains_keyword_requires_word_boundaries() {
+        assert!(contains_keyword("a INDEX b", b"INDEX"));
+        assert!(contains_keyword("index", b"INDEX"));
+        assert!(contains_keyword("x,Index(", b"INDEX"));
+        assert!(!contains_keyword(
+            "SETTINGS index_granularity = 8192",
+            b"INDEX"
+        ));
+        assert!(!contains_keyword("reindex", b"INDEX"));
+        assert!(!contains_keyword("ttl_only_drop_parts = 1", b"TTL"));
+        assert!(!contains_keyword("", b"TTL"));
     }
 
     #[test]
