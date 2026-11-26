@@ -1,12 +1,13 @@
 # SPDX-FileCopyrightText: 2026 RAprogramm <andrey.rozanov.vl@gmail.com>
 # SPDX-License-Identifier: MIT
 
-# On every published GitHub release, generate a CycloneDX SBOM and a
-# signed SLSA build-provenance attestation for the `.crate` artefact
-# that release-plz published to crates.io, then attach the SBOM, the
-# Sigstore provenance bundle, and the crate itself to the release so
-# consumers can run `gh attestation verify` against them and supply-chain
-# scanners (e.g. OpenSSF Scorecard Signed-Releases) can see the signature.
+# On every published GitHub release, download the exact `.crate` that
+# release-plz published to crates.io (verifying its SHA-256 against the
+# crates.io checksum), generate a CycloneDX SBOM and a signed SLSA
+# build-provenance attestation for it, then attach the SBOM, the Sigstore
+# provenance bundle, and the crate itself to the release so consumers can
+# run `gh attestation verify` against them and supply-chain scanners (e.g.
+# OpenSSF Scorecard Signed-Releases) can see the signature.
 #
 # `workflow_dispatch` is the escape hatch for re-attesting an older tag.
 
@@ -46,30 +47,25 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
-        with:
-          toolchain: stable
-
-      # No dependency cache here on purpose: this workflow publishes
-      # runtime artefacts, and a restored cache is an unverified input to
-      # them (zizmor cache-poisoning). Release builds are rare enough that
-      # a cold build is the right trade.
-
-      - name: Package crate
-        run: cargo package --no-verify --allow-dirty
-
-      - name: Locate .crate file
+      - name: Download the published crate from crates.io
         id: artefact
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
-          crate=$(find target/package -maxdepth 1 -name '*.crate' -print -quit)
-          if [ -z "$crate" ]; then
-            echo "::error::No .crate file produced under target/package" >&2
+          version="${TAG#v}"
+          name="sql_query_analyzer-${version}.crate"
+          curl -sfL -A "sql-query-analyzer-release-attestations" \
+            "https://static.crates.io/crates/sql_query_analyzer/${name}" -o "$name"
+          expected=$(curl -sf -A "sql-query-analyzer-release-attestations" \
+            "https://crates.io/api/v1/crates/sql_query_analyzer/${version}" |
+            jq -r '.version.checksum')
+          actual=$(sha256sum "$name" | cut -d' ' -f1)
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Downloaded crate sha256 $actual does not match the crates.io checksum $expected" >&2
             exit 1
           fi
-          echo "path=$crate" >> "$GITHUB_OUTPUT"
-          echo "name=$(basename "$crate")" >> "$GITHUB_OUTPUT"
+          echo "path=$name" >> "$GITHUB_OUTPUT"
 
       - name: Generate CycloneDX SBOM
         uses: anchore/sbom-action@dfcb83b97731532d72be422cbc51ee64adb6fd56 # v0.24.4
