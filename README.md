@@ -11,6 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Hits-of-Code](https://hitsofcode.com/github/RAprogramm/sql-query-analyzer?branch=main&exclude=Cargo.lock,.gitignore,CHANGELOG.md)](https://hitsofcode.com/github/RAprogramm/sql-query-analyzer/view?branch=main&exclude=Cargo.lock,.gitignore,CHANGELOG.md)
 [![REUSE status](https://api.reuse.software/badge/github.com/RAprogramm/sql-query-analyzer)](https://api.reuse.software/info/github.com/RAprogramm/sql-query-analyzer)
+[![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/RAprogramm/sql-query-analyzer?utm_source=oss&utm_medium=github&utm_campaign=RAprogramm%2Fsql-query-analyzer&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai/RAprogramm/sql-query-analyzer)
 
 **Static analysis and LLM-powered optimization for SQL queries.**
 
