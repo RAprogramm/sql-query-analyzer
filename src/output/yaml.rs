@@ -22,7 +22,7 @@ pub fn to_string<T: Serialize>(value: &T) -> Result<String, serde_json::Error> {
     match &json {
         Value::Object(map) => emit_object(map, 0, true, &mut out),
         Value::Array(items) => emit_array(items, 0, true, &mut out),
-        _ => emit_scalar(&json, &mut out)
+        _ => emit_scalar(&json, &mut out),
     }
     if !out.ends_with('\n') {
         out.push('\n');
@@ -46,7 +46,7 @@ fn emit_scalar(value: &Value, out: &mut String) {
         }
         Value::Array(items) if items.is_empty() => out.push_str("[]\n"),
         Value::Object(map) if map.is_empty() => out.push_str("{}\n"),
-        _ => out.push('\n')
+        _ => out.push('\n'),
     }
 }
 
@@ -68,7 +68,7 @@ fn emit_array(items: &[Value], indent: usize, first_on_current_line: bool, out: 
         match item {
             Value::Object(map) => emit_object(map, indent + 2, true, out),
             Value::Array(inner) => emit_array(inner, indent + 2, true, out),
-            _ => emit_scalar(item, out)
+            _ => emit_scalar(item, out),
         }
     }
 }
@@ -81,7 +81,7 @@ fn emit_object(
     map: &serde_json::Map<String, Value>,
     indent: usize,
     first_on_current_line: bool,
-    out: &mut String
+    out: &mut String,
 ) {
     if map.is_empty() {
         out.push_str("{}\n");
@@ -96,8 +96,14 @@ fn emit_object(
         match value {
             Value::Object(inner) if inner.is_empty() => out.push_str(" {}\n"),
             Value::Array(inner) if inner.is_empty() => out.push_str(" []\n"),
-            Value::Object(inner) => emit_object(inner, indent + 2, false, out),
-            Value::Array(inner) => emit_array(inner, indent + 2, false, out),
+            Value::Object(inner) => {
+                out.push('\n');
+                emit_object(inner, indent + 2, false, out);
+            }
+            Value::Array(inner) => {
+                out.push('\n');
+                emit_array(inner, indent + 2, false, out);
+            }
             _ => {
                 out.push(' ');
                 emit_scalar(value, out);
@@ -146,7 +152,7 @@ fn is_plain_safe(s: &str) -> bool {
         return false;
     }
     if s.contains([
-        ':', '#', '[', ']', '{', '}', ',', '&', '*', '!', '|', '>', '\'', '"', '%', '@', '`'
+        ':', '#', '[', ']', '{', '}', ',', '&', '*', '!', '|', '>', '\'', '"', '%', '@', '`',
     ]) {
         return false;
     }
@@ -175,7 +181,7 @@ fn quote(s: &str) -> String {
             c if c.is_control() => {
                 let _ = write!(out, "\\u{:04x}", c as u32);
             }
-            c => out.push(c)
+            c => out.push(c),
         }
     }
     out.push('"');
@@ -205,11 +211,40 @@ mod tests {
             "violations": [{"rule": "CH001", "severity": "Info"}],
             "count": 1
         });
-        let out = yaml(&v);
-        assert!(out.contains("violations:"));
-        assert!(out.contains("- rule: CH001"));
-        assert!(out.contains("severity: Info"));
-        assert!(out.contains("count: 1"));
+        assert_eq!(
+            yaml(&v),
+            "count: 1\nviolations:\n  - rule: CH001\n    severity: Info\n"
+        );
+    }
+
+    #[test]
+    fn nested_mapping_value_starts_on_new_line() {
+        let v: Value = serde_json::json!({"outer": {"a": 1}});
+        assert_eq!(yaml(&v), "outer:\n  a: 1\n");
+    }
+
+    #[test]
+    fn nested_sequence_value_starts_on_new_line() {
+        let v: Value = serde_json::json!({"violations": [{"rule": "CH001"}]});
+        assert_eq!(yaml(&v), "violations:\n  - rule: CH001\n");
+    }
+
+    #[test]
+    fn no_line_carries_an_inlined_block_sequence() {
+        let v: Value = serde_json::json!({
+            "report": {
+                "violations": [{"rule": "CH001", "details": {"table": "t"}}],
+                "meta": {"generated": true}
+            }
+        });
+        for line in yaml(&v).lines() {
+            if let Some((_, value)) = line.trim_start().split_once(": ") {
+                assert!(
+                    !value.trim_start().starts_with("- "),
+                    "line `{line}` embeds a block sequence after the colon"
+                );
+            }
+        }
     }
 
     #[test]
