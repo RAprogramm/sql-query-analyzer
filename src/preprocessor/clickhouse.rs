@@ -180,11 +180,11 @@ pub fn rewrite_mutations(sql: &str) -> String {
 
 /// Preprocess `ClickHouse` SQL.
 ///
-/// Removes unsupported constructs and extracts metadata.
+/// Removes unsupported constructs and extracts metadata. Each clause regex is
+/// only compiled and run when a cheap keyword scan finds its keyword, because
+/// compiling these regexes costs far more than scanning the input.
 #[must_use]
 pub fn preprocess(sql: &str) -> PreprocessorResult {
-    // Each clause regex is only compiled and run when its keyword appears:
-    // compiling these regexes costs far more than scanning the input.
     let mut metadata = PreprocessorMetadata::default();
     extract_codecs(sql, &mut metadata);
     if contains_keyword(sql, b"TTL") {

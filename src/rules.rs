@@ -296,16 +296,7 @@ impl RuleRunner {
             Box::new(schema_aware::ColumnNotInSchema::new(schema.clone())),
             Box::new(schema_aware::ImplicitTypeConversion::new(schema.clone())),
         ];
-        if dialect != SqlDialect::ClickHouse {
-            let oltp_rules: Vec<Box<dyn Rule>> = vec![
-                Box::new(schema_aware::MissingIndexOnFilterColumn::new(
-                    schema.clone()
-                )),
-                Box::new(schema_aware::SuggestIndex::new(schema.clone())),
-                Box::new(schema_aware::JoinOnNonIndexedColumn::new(schema)),
-            ];
-            schema_rules.extend(oltp_rules);
-        } else {
+        if dialect == SqlDialect::ClickHouse {
             let ch_schema_rules: Vec<Box<dyn Rule>> = vec![
                 Box::new(clickhouse::FilterNotUsingPrimaryKey {
                     schema: schema.clone()
@@ -333,6 +324,15 @@ impl RuleRunner {
                 }),
             ];
             schema_rules.extend(ch_schema_rules);
+        } else {
+            let oltp_rules: Vec<Box<dyn Rule>> = vec![
+                Box::new(schema_aware::MissingIndexOnFilterColumn::new(
+                    schema.clone()
+                )),
+                Box::new(schema_aware::SuggestIndex::new(schema.clone())),
+                Box::new(schema_aware::JoinOnNonIndexedColumn::new(schema)),
+            ];
+            schema_rules.extend(oltp_rules);
         }
         for rule in schema_rules {
             if !config
