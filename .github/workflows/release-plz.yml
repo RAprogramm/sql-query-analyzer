@@ -131,7 +131,7 @@ jobs:
           if [ -z "$rev" ]; then
             rev=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
           fi
-          gh api "repos/$GITHUB_REPOSITORY/commits/$rev" --jq .sha >/dev/null
+          rev=$(gh api "repos/$GITHUB_REPOSITORY/commits/$rev" --jq .sha)
           echo "sha=$rev" >> "$GITHUB_OUTPUT"
 
       - name: Checkout release revision
