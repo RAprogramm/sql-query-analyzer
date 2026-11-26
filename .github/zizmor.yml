@@ -7,7 +7,7 @@
 rules:
   # crates.io trusted publishing is not configured for this crate yet;
   # publishing authenticates with a scoped CRATES_IO_TOKEN secret, which
-  # the manual publish step of the Release-plz workflow passes to
+  # the publish step of the Release-plz workflow passes to
   # release-plz.
   use-trusted-publishing:
     ignore:
