@@ -143,10 +143,12 @@ jobs:
           token: ${{ steps.app_token.outputs.token }}
 
       - name: Verify the revision is merged into main
+        env:
+          REV_SHA: ${{ steps.rev.outputs.sha }}
         run: |
           set -euo pipefail
           git fetch -q origin main
-          if ! git merge-base --is-ancestor "${{ steps.rev.outputs.sha }}" origin/main; then
+          if ! git merge-base --is-ancestor "$REV_SHA" origin/main; then
             echo "::error::Release revision is not reachable from main; merge the release PR first" >&2
             exit 1
           fi
