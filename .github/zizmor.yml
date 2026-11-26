@@ -12,3 +12,10 @@ rules:
   use-trusted-publishing:
     ignore:
       - release-plz.yml
+  # GitHub's `uses: $/...` self-repository syntax is rejected by actionlint
+  # 1.7.12 (rhysd/actionlint#732), which gates every PR here, so the
+  # workspace-relative `uses: ./...` form stays until upstream accepts the
+  # new syntax; then ci.yml flips to `$/` and this ignore goes away.
+  self-repository:
+    ignore:
+      - ci.yml

@@ -9,13 +9,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   cargo-update:
     name: Update Cargo.lock
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the lockfile branch
+      pull-requests: write # open the lockfile PR
     if: github.repository == 'RAprogramm/sql-query-analyzer'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

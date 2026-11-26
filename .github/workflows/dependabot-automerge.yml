@@ -6,13 +6,15 @@ name: Dependabot Auto-Merge
 on: pull_request
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   automerge:
     name: Enable auto-merge
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # enable auto-merge on the dependabot PR
     if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'RAprogramm/sql-query-analyzer'
     steps:
       - name: Fetch dependabot metadata
