@@ -781,3 +781,40 @@ fn test_yaml_escapes_special_string_values() {
     assert!(out.contains("\"a\\nb\""), "{out}");
     assert!(out.contains("\"a\\u0007b\""), "{out}");
 }
+
+#[test]
+fn test_yaml_roundtrip_parse_and_compare() {
+    use sql_query_analyzer::output::yaml::to_string;
+    let value = serde_json::json!({
+        "outer": {"a": 1},
+        "violations": [{"rule": "CH001", "message": "prefer max_bytes 10000000"}],
+        "list": [],
+        "map": {},
+        "quote": "say \"hi\"",
+        "line": "a\nb"
+    });
+    let out = to_string(&value).unwrap();
+    let parsed: serde_json::Value = yaml_serde::from_str(&out).unwrap();
+    assert_eq!(parsed, value);
+}
+
+#[test]
+fn test_yaml_roundtrip_top_level_scalars() {
+    use sql_query_analyzer::output::yaml::to_string;
+    for value in [
+        serde_json::json!("plain"),
+        serde_json::json!(42),
+        serde_json::json!(true),
+        serde_json::json!(null)
+    ] {
+        let out = to_string(&value).unwrap();
+        let parsed: serde_json::Value = yaml_serde::from_str(&out).unwrap();
+        assert_eq!(parsed, value);
+    }
+}
+
+#[test]
+fn test_yaml_inlined_block_mapping_is_not_valid_yaml() {
+    assert!(yaml_serde::from_str::<serde_json::Value>("outer:  a: 1\n").is_err());
+    assert!(yaml_serde::from_str::<serde_json::Value>("violations:  - rule: CH001\n").is_err());
+}
