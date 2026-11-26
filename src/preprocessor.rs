@@ -94,6 +94,86 @@ impl Preprocessor {
     }
 }
 
+/// Split SQL into individual statements at top-level semicolons.
+///
+/// Semicolons inside single-quoted strings, double-quoted identifiers,
+/// backtick identifiers, `--` line comments and block comments do not split.
+/// Doubled quotes escape inside their own quote kind; backslash escapes inside
+/// single and double quotes. Every split point is an ASCII byte, so each
+/// returned fragment is a valid `&str`. Empty and whitespace-only fragments
+/// are dropped.
+#[must_use]
+pub fn split_statements(sql: &str) -> Vec<&str> {
+    let bytes = sql.as_bytes();
+    let mut statements = Vec::new();
+    let mut start = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'\'' | b'"' | b'`' => index = skip_quoted(bytes, index),
+            b'-' if bytes.get(index + 1) == Some(&b'-') => index = skip_line_comment(bytes, index),
+            b'/' if bytes.get(index + 1) == Some(&b'*') => {
+                index = skip_block_comment(bytes, index);
+            }
+            b';' => {
+                push_fragment(&mut statements, &sql[start..index]);
+                index += 1;
+                start = index;
+            }
+            _ => index += 1
+        }
+    }
+    push_fragment(&mut statements, &sql[start..]);
+    statements
+}
+
+/// Return the index just past the quoted run starting at `open`.
+fn skip_quoted(bytes: &[u8], open: usize) -> usize {
+    let quote = bytes[open];
+    let mut index = open + 1;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if quote != b'`' && byte == b'\\' {
+            index += 2;
+            continue;
+        }
+        if byte == quote {
+            if bytes.get(index + 1) == Some(&quote) {
+                index += 2;
+                continue;
+            }
+            return index + 1;
+        }
+        index += 1;
+    }
+    bytes.len()
+}
+
+/// Return the index of the newline ending the `--` comment, or end of input.
+fn skip_line_comment(bytes: &[u8], start: usize) -> usize {
+    bytes[start..]
+        .iter()
+        .position(|&byte| byte == b'\n')
+        .map_or(bytes.len(), |offset| start + offset)
+}
+
+/// Return the index just past the `*/` ending the block comment.
+fn skip_block_comment(bytes: &[u8], start: usize) -> usize {
+    let search_from = (start + 2).min(bytes.len());
+    bytes[search_from..]
+        .windows(2)
+        .position(|window| window == b"*/")
+        .map_or(bytes.len(), |offset| search_from + offset + 2)
+}
+
+/// Trim a fragment and push it unless it is empty.
+fn push_fragment<'a>(statements: &mut Vec<&'a str>, fragment: &'a str) {
+    let trimmed = fragment.trim();
+    if !trimmed.is_empty() {
+        statements.push(trimmed);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -119,5 +199,56 @@ mod tests {
         let result = Preprocessor::new(SqlDialect::ClickHouse).process(sql);
         assert!(result.metadata.codecs.contains_key("col"));
         assert_eq!(result.metadata.codecs.get("col"), Some(&"LZ4".to_string()));
+    }
+
+    #[test]
+    fn test_split_statements_basic_and_empty_fragments() {
+        assert_eq!(
+            split_statements("SELECT 1; SELECT 2;"),
+            vec!["SELECT 1", "SELECT 2"]
+        );
+        assert_eq!(split_statements(";; SELECT 1 ;;"), vec!["SELECT 1"]);
+        assert_eq!(split_statements(""), Vec::<&str>::new());
+        assert_eq!(split_statements("   ;  \n ;"), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn test_split_statements_keeps_semicolon_in_quotes() {
+        assert_eq!(
+            split_statements("INSERT INTO t VALUES ('a;b'); SELECT \"c;d\" FROM t"),
+            vec!["INSERT INTO t VALUES ('a;b')", "SELECT \"c;d\" FROM t"]
+        );
+        assert_eq!(
+            split_statements("SELECT `e;f` FROM t; SELECT 2"),
+            vec!["SELECT `e;f` FROM t", "SELECT 2"]
+        );
+        assert_eq!(
+            split_statements("INSERT INTO t VALUES ('it''s; ok'); SELECT 2"),
+            vec!["INSERT INTO t VALUES ('it''s; ok')", "SELECT 2"]
+        );
+        assert_eq!(
+            split_statements("INSERT INTO t VALUES ('it\\'s; ok'); SELECT 2"),
+            vec!["INSERT INTO t VALUES ('it\\'s; ok')", "SELECT 2"]
+        );
+    }
+
+    #[test]
+    fn test_split_statements_keeps_semicolon_in_comments() {
+        assert_eq!(
+            split_statements("SELECT 1 -- trailing ; note\n; SELECT 2"),
+            vec!["SELECT 1 -- trailing ; note", "SELECT 2"]
+        );
+        assert_eq!(
+            split_statements("SELECT /* ; */ 1; SELECT 2"),
+            vec!["SELECT /* ; */ 1", "SELECT 2"]
+        );
+    }
+
+    #[test]
+    fn test_split_statements_multibyte_is_safe() {
+        assert_eq!(
+            split_statements("SELECT 'ёжик;'; SELECT \"лош;адь\""),
+            vec!["SELECT 'ёжик;'", "SELECT \"лош;адь\""]
+        );
     }
 }

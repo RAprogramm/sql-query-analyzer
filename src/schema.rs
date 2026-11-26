@@ -39,7 +39,7 @@ use sqlparser::parser::Parser;
 
 use crate::{
     error::{AppResult, schema_parse_error},
-    preprocessor::{Preprocessor, PreprocessorMetadata},
+    preprocessor::{Preprocessor, PreprocessorMetadata, split_statements},
     query::SqlDialect
 };
 
@@ -116,6 +116,11 @@ pub struct Schema {
 impl Schema {
     /// Parse SQL schema from string with specified dialect
     ///
+    /// Each statement is preprocessed on its own so that extracted metadata
+    /// (partition, TTL, settings, skip indexes, projections, codecs) stays
+    /// associated with the table that defines it instead of leaking across
+    /// tables in the same batch.
+    ///
     /// # Arguments
     ///
     /// * `sql` - SQL schema definition
@@ -130,20 +135,22 @@ impl Schema {
     /// Returns error if SQL parsing fails
     pub fn parse(sql: &str, dialect: SqlDialect) -> AppResult<Self> {
         let preprocessor = Preprocessor::new(dialect);
-        let preprocessed = preprocessor.process(sql);
         let parser_dialect = dialect.into_parser_dialect();
-        let statements = Parser::parse_sql(parser_dialect.as_ref(), &preprocessed.sql)
-            .map_err(|e| schema_parse_error(e.to_string()))?;
         let mut schema = Self::default();
-        for stmt in statements {
-            schema.process_statement(stmt, &preprocessed.metadata, dialect);
+        for statement_sql in split_statements(sql) {
+            let preprocessed = preprocessor.process(statement_sql);
+            let statements = Parser::parse_sql(parser_dialect.as_ref(), &preprocessed.sql)
+                .map_err(|e| schema_parse_error(e.to_string()))?;
+            for statement in statements {
+                schema.process_statement(statement, &preprocessed.metadata, dialect);
+            }
+            schema
+                .dictionaries
+                .extend(preprocessed.metadata.dictionaries);
+            schema
+                .materialized_views
+                .extend(preprocessed.metadata.materialized_views);
         }
-        schema
-            .dictionaries
-            .clone_from(&preprocessed.metadata.dictionaries);
-        schema
-            .materialized_views
-            .clone_from(&preprocessed.metadata.materialized_views);
         Ok(schema)
     }
 

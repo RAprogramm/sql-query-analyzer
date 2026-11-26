@@ -22,7 +22,7 @@ pub fn to_string<T: Serialize>(value: &T) -> Result<String, serde_json::Error> {
     match &json {
         Value::Object(map) => emit_object(map, 0, true, &mut out),
         Value::Array(items) => emit_array(items, 0, true, &mut out),
-        _ => emit_scalar(&json, &mut out),
+        _ => emit_scalar(&json, &mut out)
     }
     if !out.ends_with('\n') {
         out.push('\n');
@@ -46,7 +46,7 @@ fn emit_scalar(value: &Value, out: &mut String) {
         }
         Value::Array(items) if items.is_empty() => out.push_str("[]\n"),
         Value::Object(map) if map.is_empty() => out.push_str("{}\n"),
-        _ => out.push('\n'),
+        _ => out.push('\n')
     }
 }
 
@@ -68,7 +68,7 @@ fn emit_array(items: &[Value], indent: usize, first_on_current_line: bool, out: 
         match item {
             Value::Object(map) => emit_object(map, indent + 2, true, out),
             Value::Array(inner) => emit_array(inner, indent + 2, true, out),
-            _ => emit_scalar(item, out),
+            _ => emit_scalar(item, out)
         }
     }
 }
@@ -81,7 +81,7 @@ fn emit_object(
     map: &serde_json::Map<String, Value>,
     indent: usize,
     first_on_current_line: bool,
-    out: &mut String,
+    out: &mut String
 ) {
     if map.is_empty() {
         out.push_str("{}\n");
@@ -152,7 +152,7 @@ fn is_plain_safe(s: &str) -> bool {
         return false;
     }
     if s.contains([
-        ':', '#', '[', ']', '{', '}', ',', '&', '*', '!', '|', '>', '\'', '"', '%', '@', '`',
+        ':', '#', '[', ']', '{', '}', ',', '&', '*', '!', '|', '>', '\'', '"', '%', '@', '`'
     ]) {
         return false;
     }
@@ -181,7 +181,7 @@ fn quote(s: &str) -> String {
             c if c.is_control() => {
                 let _ = write!(out, "\\u{:04x}", c as u32);
             }
-            c => out.push(c),
+            c => out.push(c)
         }
     }
     out.push('"');

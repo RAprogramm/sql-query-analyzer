@@ -34,36 +34,36 @@ use super::{PreprocessorMetadata, PreprocessorResult};
 #[derive(Debug, Clone)]
 pub struct SkipIndexInfo {
     /// Index name
-    pub name: String,
+    pub name:        String,
     /// Indexed expression (column or expression)
-    pub expr: String,
+    pub expr:        String,
     /// Index type (minmax, set, `bloom_filter`, `ngrambf_v1`, `tokenbf_v1`,
     /// text)
-    pub type_name: String,
+    pub type_name:   String,
     /// Optional type arguments (e.g. "100" for set, "0.01" for `bloom_filter`)
-    pub type_args: Option<String>,
+    pub type_args:   Option<String>,
     /// Granularity in granules
-    pub granularity: usize,
+    pub granularity: usize
 }
 
 /// Metadata for a `ClickHouse` projection.
 #[derive(Debug, Clone)]
 pub struct ProjectionInfo {
     /// Projection name
-    pub name: String,
+    pub name:  String,
     /// Inner `SELECT` definition (without the surrounding parentheses)
-    pub query: String,
+    pub query: String
 }
 
 /// Metadata for a `ClickHouse` materialized view.
 #[derive(Debug, Clone)]
 pub struct MaterializedViewInfo {
     /// View name
-    pub name: String,
+    pub name:   String,
     /// Destination table (`TO target`), when present
     pub target: Option<String>,
     /// Source `SELECT` feeding the view
-    pub query: String,
+    pub query:  String
 }
 
 /// Regex for matching CODEC clauses with optional nested parentheses.
@@ -107,7 +107,7 @@ static SETTING_PAIR_REGEX: LazyLock<Regex> =
 /// Matches: `INDEX name expr TYPE type(args) GRANULARITY n`
 static SKIP_INDEX_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"(?is)\bINDEX\s+(\w+)\s+(.+?)\s+TYPE\s+(\w+)(?:\s*\(([^)]*)\))?\s+GRANULARITY\s+(\d+)",
+        r"(?is)\bINDEX\s+(\w+)\s+(.+?)\s+TYPE\s+(\w+)(?:\s*\(([^)]*)\))?\s+GRANULARITY\s+(\d+)"
     )
     .expect("valid regex")
 });
@@ -123,7 +123,7 @@ static SKIP_INDEX_REMOVE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 /// Captures the dictionary name (group 1).
 static DICTIONARY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"(?i)\bCREATE\s+(?:OR\s+REPLACE\s+)?DICTIONARY\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w.]+)",
+        r"(?i)\bCREATE\s+(?:OR\s+REPLACE\s+)?DICTIONARY\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w.]+)"
     )
     .expect("valid regex")
 });
@@ -232,7 +232,7 @@ pub fn preprocess(sql: &str) -> PreprocessorResult {
     result = normalize_whitespace(&result);
     PreprocessorResult {
         sql: result,
-        metadata,
+        metadata
     }
 }
 
@@ -315,7 +315,7 @@ fn extract_skip_indexes(sql: &str, metadata: &mut PreprocessorMetadata) {
                 expr: e,
                 type_name: t,
                 type_args: type_args.filter(|s| !s.is_empty()),
-                granularity,
+                granularity
             });
         }
     }
@@ -360,7 +360,14 @@ fn find_projections(sql: &str) -> Vec<(usize, usize, ProjectionInfo)> {
         if bytes[idx] == b'(' {
             if let Some(end) = matching_paren(bytes, idx) {
                 let query = sql[idx + 1..end].trim().to_string();
-                found.push((start, end + 1, ProjectionInfo { name, query }));
+                found.push((
+                    start,
+                    end + 1,
+                    ProjectionInfo {
+                        name,
+                        query
+                    }
+                ));
                 search = end + 1;
             }
         } else if bytes
@@ -370,7 +377,14 @@ fn find_projections(sql: &str) -> Vec<(usize, usize, ProjectionInfo)> {
             let body_start = idx + 2;
             if let Some(end) = projection_as_end(bytes, body_start) {
                 let query = sql[body_start..end].trim().to_string();
-                found.push((start, end, ProjectionInfo { name, query }));
+                found.push((
+                    start,
+                    end,
+                    ProjectionInfo {
+                        name,
+                        query
+                    }
+                ));
                 search = end;
             }
         }
@@ -493,7 +507,7 @@ fn extract_materialized_views(sql: &str, metadata: &mut PreprocessorMetadata) {
         metadata.materialized_views.push(MaterializedViewInfo {
             name,
             target,
-            query,
+            query
         });
     }
 }
@@ -695,8 +709,7 @@ mod tests {
 
     #[test]
     fn test_projection_extraction() {
-        let sql =
-            "CREATE TABLE t (a UInt64, b String, PROJECTION p (SELECT a, sum(b) ORDER BY a)) \
+        let sql = "CREATE TABLE t (a UInt64, b String, PROJECTION p (SELECT a, sum(b) ORDER BY a)) \
                    ENGINE = MergeTree ORDER BY a";
         let result = preprocess(sql);
         assert!(!result.sql.contains("PROJECTION"));
@@ -755,9 +768,11 @@ mod tests {
                    AS SELECT z FROM src";
         let result = preprocess(sql);
         assert!(result.sql.contains("CREATE TABLE between"));
-        assert!(result
-            .sql
-            .contains("AS WITH s AS (SELECT 1 AS x) SELECT x FROM s"));
+        assert!(
+            result
+                .sql
+                .contains("AS WITH s AS (SELECT 1 AS x) SELECT x FROM s")
+        );
         assert!(result.sql.contains("AS SELECT z FROM src"));
         assert_eq!(result.metadata.materialized_views.len(), 2);
     }
