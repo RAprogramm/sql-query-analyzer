@@ -137,7 +137,7 @@ impl Schema {
         let preprocessor = Preprocessor::new(dialect);
         let parser_dialect = dialect.into_parser_dialect();
         let mut schema = Self::default();
-        for statement_sql in split_statements(sql) {
+        for statement_sql in split_statements(sql, dialect.uses_backslash_escapes()) {
             let preprocessed = preprocessor.process(statement_sql);
             let statements = Parser::parse_sql(parser_dialect.as_ref(), &preprocessed.sql)
                 .map_err(|e| schema_parse_error(e.to_string()))?;

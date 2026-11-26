@@ -33,6 +33,17 @@ pub enum SqlDialect {
 }
 
 impl SqlDialect {
+    /// Whether string literals in this dialect treat backslash as an escape
+    /// character.
+    ///
+    /// `MySQL` and `ClickHouse` interpret `\` inside quoted strings;
+    /// `PostgreSQL` and `SQLite` take it literally, so splitters and parsers
+    /// must only honour backslash escapes for the dialects that do.
+    #[must_use]
+    pub const fn uses_backslash_escapes(self) -> bool {
+        matches!(self, Self::MySQL | Self::ClickHouse)
+    }
+
     /// Convert to sqlparser dialect for parsing
     #[must_use]
     pub fn into_parser_dialect(self) -> Box<dyn Dialect> {
