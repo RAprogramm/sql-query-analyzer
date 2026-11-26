@@ -78,8 +78,14 @@ a version that already exists on crates.io and a tag that already
 exists, so the missing later effects are never created by a retry.
 Complete the missing steps by hand instead:
 
-1. Crate published, tag missing — tag the merged release commit and
-   push it: `git tag -a vX.Y.Z <release-revision> && git push origin vX.Y.Z`.
+1. Crate published, tag missing — read `git.sha1` from `.cargo_vcs_info.json`
+   inside the published crate
+   (`tar -xOf sql_query_analyzer-X.Y.Z.crate .cargo_vcs_info.json`);
+   release-plz can publish from the release PR's head commit rather than
+   the merge commit, so this revision — not the merge commit — is what the
+   crate was packaged from. Confirm the commit is reachable from `main`
+   (`git merge-base --is-ancestor <sha> origin/main`), then tag it and
+   push: `git tag -a vX.Y.Z <sha> && git push origin vX.Y.Z`.
 2. Tag pushed, GitHub release missing — create it from the changelog
    section: copy the `## [X.Y.Z]` section of `CHANGELOG.md` into a file
    and run `gh release create vX.Y.Z --notes-file <section.md>`.
