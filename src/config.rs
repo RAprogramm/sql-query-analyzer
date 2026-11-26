@@ -120,8 +120,8 @@ impl Config {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::AppError`] if a configuration file exists but cannot be
-    /// read or is not valid TOML.
+    /// Returns [`crate::error::AppError`] if a configuration file exists but
+    /// cannot be read or is not valid TOML.
     pub fn load() -> AppResult<Self> {
         let mut config = Self::default();
         if let Some(home) = env::var_os("HOME") {

@@ -1,6 +1,8 @@
 mod extract;
 mod types;
 
+use std::borrow::Cow;
+
 use extract::{ExtractionContext, extract_columns_from_expr, extract_from_set_expr};
 use indexmap::IndexSet;
 use rayon::prelude::*;
@@ -13,7 +15,10 @@ use sqlparser::{
 };
 pub use types::{Query, QueryType};
 
-use crate::error::{AppResult, query_parse_error};
+use crate::{
+    error::{AppResult, query_parse_error},
+    preprocessor::clickhouse::rewrite_mutations
+};
 
 /// SQL dialect for parsing
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -49,14 +54,14 @@ impl SqlDialect {
 ///
 /// # Errors
 ///
-/// Returns [`crate::AppError`] if the SQL cannot be parsed by the underlying
-/// parser for the selected dialect.
+/// Returns [`crate::error::AppError`] if the SQL cannot be parsed by the
+/// underlying parser for the selected dialect.
 pub fn parse_queries(sql: &str, dialect: SqlDialect) -> AppResult<Vec<Query>> {
     let parser_dialect = dialect.into_parser_dialect();
     let sql = if dialect == SqlDialect::ClickHouse {
-        std::borrow::Cow::Owned(crate::preprocessor::clickhouse::rewrite_mutations(sql))
+        Cow::Owned(rewrite_mutations(sql))
     } else {
-        std::borrow::Cow::Borrowed(sql)
+        Cow::Borrowed(sql)
     };
     let statements = Parser::parse_sql(parser_dialect.as_ref(), sql.as_ref())
         .map_err(|e| query_parse_error(e.to_string()))?;

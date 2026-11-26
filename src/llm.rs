@@ -240,8 +240,8 @@ impl LlmClient {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::AppError`] if the provider request fails after all
-    /// retry attempts, or if the response cannot be parsed.
+    /// Returns [`crate::error::AppError`] if the provider request fails after
+    /// all retry attempts, or if the response cannot be parsed.
     pub async fn analyze(
         &self,
         schema_summary: &str,

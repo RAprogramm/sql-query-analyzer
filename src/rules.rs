@@ -279,6 +279,12 @@ impl RuleRunner {
     ///
     /// When the dialect is [`SqlDialect::ClickHouse`], `ClickHouse`
     /// schema-aware rules (CH002-CH003, CH005-CH007, CH012) are registered too.
+    ///
+    /// # Notes
+    ///
+    /// OLTP-style index suggestions (`CREATE INDEX`) do not apply to
+    /// `ClickHouse`'s sparse primary key; the CH002/CH005 rules cover that
+    /// dialect instead.
     #[must_use]
     pub fn with_schema_and_config_and_dialect(
         dialect: SqlDialect,
@@ -290,9 +296,6 @@ impl RuleRunner {
             Box::new(schema_aware::ColumnNotInSchema::new(schema.clone())),
             Box::new(schema_aware::ImplicitTypeConversion::new(schema.clone())),
         ];
-        // OLTP-style index suggestions (CREATE INDEX) do not apply to
-        // ClickHouse's sparse primary key; the CH002/CH005 rules cover that
-        // dialect instead.
         if dialect != SqlDialect::ClickHouse {
             let oltp_rules: Vec<Box<dyn Rule>> = vec![
                 Box::new(schema_aware::MissingIndexOnFilterColumn::new(
