@@ -1,2 +1,16 @@
 /target
+/coverage
+/fuzz/target
+/fuzz/artifacts
+/fuzz/corpus
+*.profdata
+*.profraw
+*.log
+.env
+.env.*
 .claude
+.opencode
+opencode.json
+.vscode
+.idea
+.DS_Store

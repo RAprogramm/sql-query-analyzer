@@ -7,7 +7,7 @@ pub fn extract_columns_from_expr(
     expr: &sqlparser::ast::Expr,
     columns: &mut IndexSet<CompactString>
 ) {
-    use sqlparser::ast::{Expr, InTarget};
+    use sqlparser::ast::Expr;
     match expr {
         Expr::Identifier(ident) => {
             columns.insert(ident.value.as_str().into());
@@ -27,30 +27,27 @@ pub fn extract_columns_from_expr(
         }
         Expr::UnaryOp {
             expr, ..
+        }
+        | Expr::Cast {
+            expr, ..
+        }
+        | Expr::Extract {
+            expr, ..
         } => {
             extract_columns_from_expr(expr, columns);
         }
         Expr::In {
             expr,
-            target: InTarget::List(list),
+            target,
             ..
         } => {
             extract_columns_from_expr(expr, columns);
-            for item in list {
-                extract_columns_from_expr(item, columns);
+            if let sqlparser::ast::InTarget::List(list) = target {
+                for item in list {
+                    extract_columns_from_expr(item, columns);
+                }
             }
         }
-        Expr::In {
-            expr,
-            target: InTarget::Subquery(_),
-            ..
-        } => {
-            extract_columns_from_expr(expr, columns);
-        }
-        Expr::Subquery(_)
-        | Expr::Exists {
-            ..
-        } => {}
         Expr::Between {
             expr,
             low,
@@ -61,10 +58,7 @@ pub fn extract_columns_from_expr(
             extract_columns_from_expr(low, columns);
             extract_columns_from_expr(high, columns);
         }
-        Expr::IsNull(e) | Expr::IsNotNull(e) => {
-            extract_columns_from_expr(e, columns);
-        }
-        Expr::Nested(e) => {
+        Expr::IsNull(e) | Expr::IsNotNull(e) | Expr::Nested(e) => {
             extract_columns_from_expr(e, columns);
         }
         Expr::Function(func) => {
@@ -95,16 +89,6 @@ pub fn extract_columns_from_expr(
             if let Some(else_res) = else_result {
                 extract_columns_from_expr(else_res, columns);
             }
-        }
-        Expr::Cast {
-            expr, ..
-        } => {
-            extract_columns_from_expr(expr, columns);
-        }
-        Expr::Extract {
-            expr, ..
-        } => {
-            extract_columns_from_expr(expr, columns);
         }
         _ => {}
     }
@@ -185,27 +169,30 @@ pub fn extract_window_functions(expr: &sqlparser::ast::Expr, windows: &mut Vec<W
 }
 
 pub fn contains_subquery(expr: &sqlparser::ast::Expr) -> bool {
-    use sqlparser::ast::{Expr, InTarget};
+    use sqlparser::ast::Expr;
     match expr {
         Expr::Subquery(_)
-        | Expr::In {
-            target: InTarget::Subquery(_),
-            ..
-        }
         | Expr::Exists {
             ..
         } => true,
+        Expr::In {
+            expr,
+            target,
+            ..
+        } => {
+            contains_subquery(expr)
+                || match target {
+                    sqlparser::ast::InTarget::List(list) => list.iter().any(contains_subquery),
+                    sqlparser::ast::InTarget::Subquery(_) => true,
+                    _ => false
+                }
+        }
         Expr::BinaryOp {
             left,
             right,
             ..
         } => contains_subquery(left) || contains_subquery(right),
         Expr::Nested(e) => contains_subquery(e),
-        Expr::In {
-            expr,
-            target: InTarget::List(list),
-            ..
-        } => contains_subquery(expr) || list.iter().any(contains_subquery),
         Expr::Case {
             operand,
             conditions,

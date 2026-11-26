@@ -22,7 +22,11 @@ fn analyze_query(sql: &str) -> Vec<String> {
 fn analyze_with_schema(sql: &str, schema_sql: &str) -> Vec<String> {
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     let schema = Schema::parse(schema_sql, SqlDialect::Generic).unwrap();
-    let runner = RuleRunner::with_schema_and_config(schema, RulesConfig::default());
+    let runner = RuleRunner::with_schema_and_config_and_dialect(
+        SqlDialect::Generic,
+        schema,
+        &RulesConfig::default()
+    );
     let report = runner.analyze(&queries);
     report
         .violations
@@ -525,10 +529,10 @@ fn test_distinct_with_order_by() {
 
 #[test]
 fn test_join_on_non_indexed_column_flagged() {
-    let schema = r#"
+    let schema = r"
         CREATE TABLE users (id INT PRIMARY KEY);
         CREATE TABLE orders (id INT PRIMARY KEY, user_id INT);
-    "#;
+    ";
     let violations = analyze_with_schema(
         "SELECT u.id FROM users u JOIN orders o ON o.user_id = u.id WHERE u.id > 0 LIMIT 10",
         schema
@@ -538,11 +542,11 @@ fn test_join_on_non_indexed_column_flagged() {
 
 #[test]
 fn test_join_on_indexed_column_ok() {
-    let schema = r#"
+    let schema = r"
         CREATE TABLE users (id INT PRIMARY KEY);
         CREATE TABLE orders (id INT PRIMARY KEY, user_id INT);
         CREATE INDEX idx_orders_user_id ON orders(user_id);
-    "#;
+    ";
     let violations = analyze_with_schema(
         "SELECT u.id FROM users u JOIN orders o ON o.user_id = u.id WHERE u.id > 0 LIMIT 10",
         schema
@@ -589,10 +593,10 @@ fn test_schema_missing_index() {
 
 #[test]
 fn test_schema_with_index() {
-    let schema = r#"
+    let schema = r"
         CREATE TABLE users (id INT PRIMARY KEY, email VARCHAR(255));
         CREATE INDEX idx_email ON users(email);
-    "#;
+    ";
     let violations = analyze_with_schema(
         "SELECT * FROM users WHERE email = 'test@test.com' LIMIT 10",
         schema
@@ -611,7 +615,7 @@ fn test_rule_disabled() {
         ],
         ..Default::default()
     };
-    let runner = RuleRunner::with_config(config);
+    let runner = RuleRunner::with_config(&config);
     let report = runner.analyze(&queries);
     let rule_ids: Vec<_> = report.violations.iter().map(|v| v.rule_id).collect();
     assert!(!rule_ids.contains(&"PERF001"));
@@ -628,7 +632,7 @@ fn test_severity_override() {
         disabled: vec![],
         severity
     };
-    let runner = RuleRunner::with_config(config);
+    let runner = RuleRunner::with_config(&config);
     let report = runner.analyze(&queries);
     let style_violation = report.violations.iter().find(|v| v.rule_id == "STYLE001");
     assert!(style_violation.is_some());
@@ -780,10 +784,10 @@ fn test_join_missing_alias() {
 
 #[test]
 fn test_schema_join_column_missing_index() {
-    let schema = r#"
+    let schema = r"
         CREATE TABLE users (id INT PRIMARY KEY);
         CREATE TABLE orders (id INT PRIMARY KEY, user_id INT);
-    "#;
+    ";
     let violations = analyze_with_schema(
         "SELECT * FROM users u INNER JOIN orders o ON u.id = o.user_id LIMIT 10",
         schema
@@ -810,12 +814,12 @@ fn test_schema_column_not_in_schema() {
 
 #[test]
 fn test_schema_large_table_no_index() {
-    let schema = r#"
+    let schema = r"
         CREATE TABLE users (id INT PRIMARY KEY, email VARCHAR(255));
         INSERT INTO users VALUES (1, 'a');
         INSERT INTO users VALUES (2, 'b');
         INSERT INTO users VALUES (3, 'c');
-    "#;
+    ";
     let violations =
         analyze_with_schema("SELECT * FROM users WHERE email = 'test' LIMIT 10", schema);
     assert!(violations.contains(&"SCHEMA001".to_string()));

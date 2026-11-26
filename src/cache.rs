@@ -47,6 +47,7 @@ pub struct QueryCache {
 }
 
 impl QueryCache {
+    #[must_use]
     pub fn new(max_size: usize) -> Self {
         Self {
             cache: HashMap::with_capacity(max_size),
@@ -60,6 +61,7 @@ impl QueryCache {
         hasher.finish()
     }
 
+    #[must_use]
     pub fn get(&self, sql: &str) -> Option<Vec<Query>> {
         let key = Self::hash_key(sql);
         self.cache.get(&key).cloned()

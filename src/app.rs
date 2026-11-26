@@ -252,7 +252,7 @@ mod tests {
         let config = Config::default();
         let result = execute_command(command, config).await.unwrap();
         assert_eq!(result.exit_code, 0);
-        assert!(!result.stdout.is_empty());
+        assert_ne!(result.stdout, [] as [std::string::String; 0]);
     }
 
     #[tokio::test]
@@ -348,7 +348,7 @@ mod tests {
         let config = Config::default();
         let result = execute_command(command, config).await.unwrap();
         let output = result.stdout.join("");
-        assert!(output.contains("{") || output.contains("queries_analyzed"));
+        assert!(output.contains('{') || output.contains("queries_analyzed"));
     }
 
     #[tokio::test]
@@ -372,7 +372,7 @@ mod tests {
         };
         let config = Config::default();
         let result = execute_command(command, config).await.unwrap();
-        assert!(!result.stdout.is_empty());
+        assert_ne!(result.stdout, [] as [std::string::String; 0]);
     }
 
     #[tokio::test]
@@ -396,7 +396,7 @@ mod tests {
         };
         let config = Config::default();
         let result = execute_command(command, config).await.unwrap();
-        assert!(!result.stdout.is_empty());
+        assert_ne!(result.stdout, [] as [std::string::String; 0]);
     }
 
     #[tokio::test]

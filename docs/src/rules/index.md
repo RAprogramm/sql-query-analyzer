@@ -5,7 +5,8 @@ SPDX-License-Identifier: MIT
 
 # Rules Overview
 
-35 built-in rules across four categories. Every rule has a stable ID, a default
+35 built-in rules across four categories, plus ClickHouse-specific rules that
+activate only with `--dialect clickhouse`. Every rule has a stable ID, a default
 severity, and a suggestion attached to each violation. Rules can be disabled or
 re-weighted via [configuration](../configuration.md).
 
@@ -15,6 +16,7 @@ re-weighted via [configuration](../configuration.md).
 | [Style](style.md) | `STYLE001`–`STYLE004` | Readability and maintainability |
 | [Security](security.md) | `SEC001`–`SEC008` | Destructive statements without guards |
 | [Schema-Aware](schema.md) | `SCHEMA001`–`SCHEMA004` | Cross-checking queries against DDL |
+| [ClickHouse](clickhouse.md) | `CH001`–`CH019` | Sparse index, partition pruning, columnar anti-patterns |
 
 ## Severities
 

@@ -63,8 +63,8 @@ fn test_cache_different_queries() {
     let mut cache = QueryCache::new(100);
     let q1 = parse_queries("SELECT a FROM t1", SqlDialect::Generic).unwrap();
     let q2 = parse_queries("SELECT b FROM t2", SqlDialect::Generic).unwrap();
-    cache.insert("SELECT a FROM t1", q1.clone());
-    cache.insert("SELECT b FROM t2", q2.clone());
+    cache.insert("SELECT a FROM t1", q1);
+    cache.insert("SELECT b FROM t2", q2);
     let cached1 = cache.get("SELECT a FROM t1");
     let cached2 = cache.get("SELECT b FROM t2");
     assert!(cached1.is_some());

@@ -22,7 +22,7 @@
 //! max_retries = 3
 //! initial_delay_ms = 1000
 //! max_delay_ms = 30000
-//! backoff_factor = 2.0
+//! backoff_factor = 2
 //!
 //! [rules]
 //! disabled = ["STYLE001", "PERF011"]
@@ -64,7 +64,7 @@ pub struct RulesConfig {
     /// Disabled rule IDs
     #[serde(default)]
     pub disabled: Vec<String>,
-    /// Severity overrides (rule_id -> severity)
+    /// Severity overrides (`rule_id` -> severity)
     #[serde(default)]
     pub severity: HashMap<String, String>
 }
@@ -95,7 +95,7 @@ pub struct RetryConfig {
     pub max_retries:      u32,
     pub initial_delay_ms: u64,
     pub max_delay_ms:     u64,
-    pub backoff_factor:   f64
+    pub backoff_factor:   u32
 }
 
 impl Default for RetryConfig {
@@ -104,7 +104,7 @@ impl Default for RetryConfig {
             max_retries:      3,
             initial_delay_ms: 1000,
             max_delay_ms:     30000,
-            backoff_factor:   2.0
+            backoff_factor:   2
         }
     }
 }
@@ -117,6 +117,11 @@ impl Config {
     /// 2. Config file in current directory (.sql-analyzer.toml)
     /// 3. Config file in home directory (~/.config/sql-analyzer/config.toml)
     /// 4. Default values
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::AppError`] if a configuration file exists but
+    /// cannot be read or is not valid TOML.
     pub fn load() -> AppResult<Self> {
         let mut config = Self::default();
         if let Some(home) = env::var_os("HOME") {
@@ -126,17 +131,17 @@ impl Config {
                 .join("config.toml");
             if home_config.exists() {
                 let content = fs::read_to_string(&home_config)
-                    .map_err(|e| config_error(format!("Failed to read config file: {}", e)))?;
+                    .map_err(|e| config_error(format!("Failed to read config file: {e}")))?;
                 config = toml::from_str(&content)
-                    .map_err(|e| config_error(format!("Invalid config file: {}", e)))?;
+                    .map_err(|e| config_error(format!("Invalid config file: {e}")))?;
             }
         }
         let local_config = PathBuf::from(".sql-analyzer.toml");
         if local_config.exists() {
             let content = fs::read_to_string(&local_config)
-                .map_err(|e| config_error(format!("Failed to read config file: {}", e)))?;
+                .map_err(|e| config_error(format!("Failed to read config file: {e}")))?;
             config = toml::from_str(&content)
-                .map_err(|e| config_error(format!("Invalid config file: {}", e)))?;
+                .map_err(|e| config_error(format!("Invalid config file: {e}")))?;
         }
         if let Ok(api_key) = env::var("LLM_API_KEY") {
             config.llm.api_key = Some(api_key);

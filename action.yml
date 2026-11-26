@@ -72,18 +72,21 @@ runs:
 
         curl -sL "$URL" | tar xz -C /tmp
         chmod +x /tmp/sql_query_analyzer
-        echo "/tmp" >> $GITHUB_PATH
+        echo "/tmp" >> "$GITHUB_PATH"
 
     - name: Run analysis
       id: analyze
       shell: bash
+      env:
+        INPUT_SCHEMA: ${{ inputs.schema }}
+        INPUT_QUERIES: ${{ inputs.queries }}
+        INPUT_DIALECT: ${{ inputs.dialect }}
+        INPUT_FORMAT: ${{ inputs.format }}
       run: |
-        ARGS="analyze -s ${{ inputs.schema }} -q ${{ inputs.queries }}"
-        ARGS="$ARGS --dialect ${{ inputs.dialect }}"
-        ARGS="$ARGS -f ${{ inputs.format }}"
-        ARGS="$ARGS --no-color"
+        ARGS=(analyze -s "$INPUT_SCHEMA" -q "$INPUT_QUERIES")
+        ARGS+=(--dialect "$INPUT_DIALECT" -f "$INPUT_FORMAT" --no-color)
 
-        OUTPUT=$(sql_query_analyzer $ARGS 2>&1) || EXIT_CODE=$?
+        OUTPUT=$(sql_query_analyzer "${ARGS[@]}" 2>&1) || EXIT_CODE=$?
         EXIT_CODE=${EXIT_CODE:-0}
 
         echo "$OUTPUT"
@@ -91,30 +94,34 @@ runs:
         ERROR_COUNT=$(echo "$OUTPUT" | grep -oP '\d+(?= error)' | head -1 || echo "0")
         WARNING_COUNT=$(echo "$OUTPUT" | grep -oP '\d+(?= warning)' | head -1 || echo "0")
 
-        echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
-        echo "error_count=${ERROR_COUNT:-0}" >> $GITHUB_OUTPUT
-        echo "warning_count=${WARNING_COUNT:-0}" >> $GITHUB_OUTPUT
+        echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+        echo "error_count=${ERROR_COUNT:-0}" >> "$GITHUB_OUTPUT"
+        echo "warning_count=${WARNING_COUNT:-0}" >> "$GITHUB_OUTPUT"
 
         {
           echo "analysis<<EOF"
           echo "$OUTPUT"
           echo "EOF"
-        } >> $GITHUB_OUTPUT
+        } >> "$GITHUB_OUTPUT"
 
     - name: Generate SARIF
       id: sarif
       if: inputs.upload-sarif == 'true'
       shell: bash
+      env:
+        INPUT_SCHEMA: ${{ inputs.schema }}
+        INPUT_QUERIES: ${{ inputs.queries }}
+        INPUT_DIALECT: ${{ inputs.dialect }}
       run: |
         sql_query_analyzer analyze \
-          -s ${{ inputs.schema }} \
-          -q ${{ inputs.queries }} \
-          --dialect ${{ inputs.dialect }} \
+          -s "$INPUT_SCHEMA" \
+          -q "$INPUT_QUERIES" \
+          --dialect "$INPUT_DIALECT" \
           -f sarif > results.sarif || true
 
     - name: Upload SARIF
       if: inputs.upload-sarif == 'true'
-      uses: github/codeql-action/upload-sarif@v4
+      uses: github/codeql-action/upload-sarif@915412ff23e8b7659517e607487dbeae018f2934 # v4
       with:
         sarif_file: results.sarif
         category: sql-query-analyzer
@@ -124,15 +131,19 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPOSITORY: ${{ github.repository }}
+        UPDATE_COMMENT: ${{ inputs.update-comment }}
+        INPUT_SCHEMA: ${{ inputs.schema }}
+        INPUT_QUERIES: ${{ inputs.queries }}
+        INPUT_DIALECT: ${{ inputs.dialect }}
+        ERROR_COUNT: ${{ steps.analyze.outputs.error_count }}
+        WARNING_COUNT: ${{ steps.analyze.outputs.warning_count }}
+        EXIT_CODE: ${{ steps.analyze.outputs.exit_code }}
+        ANALYSIS: ${{ steps.analyze.outputs.analysis }}
       run: |
         MARKER="<!-- sql-query-analyzer -->"
-        PR_NUMBER=${{ github.event.pull_request.number }}
 
-        ERROR_COUNT=${{ steps.analyze.outputs.error_count }}
-        WARNING_COUNT=${{ steps.analyze.outputs.warning_count }}
-        EXIT_CODE=${{ steps.analyze.outputs.exit_code }}
-
-        # Build verdict section
         if [ "$EXIT_CODE" = "0" ]; then
           VERDICT="> [!TIP]
         > **All SQL checks passed.** No issues found in your queries!"
@@ -146,11 +157,9 @@ runs:
         > - Run \`sql_query_analyzer analyze\` locally for detailed output"
         fi
 
-        # Status icons
         if [ "${ERROR_COUNT:-0}" -eq 0 ]; then ERROR_STATUS="✅"; else ERROR_STATUS="❌"; fi
         if [ "${WARNING_COUNT:-0}" -eq 0 ]; then WARNING_STATUS="✅"; else WARNING_STATUS="⚠️"; fi
 
-        # Build comment
         COMMENT="${MARKER}
         ## SQL Query Analysis
 
@@ -172,7 +181,7 @@ runs:
         <summary><strong>Analysis Details</strong> — full output</summary>
 
         \`\`\`
-        ${{ steps.analyze.outputs.analysis }}
+        ${ANALYSIS}
         \`\`\`
 
         </details>
@@ -184,40 +193,42 @@ runs:
 
         | Setting | Value |
         |:--------|:------|
-        | Dialect | \`${{ inputs.dialect }}\` |
-        | Schema | \`${{ inputs.schema }}\` |
-        | Queries | \`${{ inputs.queries }}\` |
+        | Dialect | \`${INPUT_DIALECT}\` |
+        | Schema | \`${INPUT_SCHEMA}\` |
+        | Queries | \`${INPUT_QUERIES}\` |
 
         </details>
 
         ---
         <sub>[SQL Query Analyzer](https://github.com/RAprogramm/sql-query-analyzer)</sub>"
 
-        if [ "${{ inputs.update-comment }}" = "true" ]; then
-          EXISTING=$(gh api repos/${{ github.repository }}/issues/${PR_NUMBER}/comments \
+        if [ "$UPDATE_COMMENT" = "true" ]; then
+          EXISTING=$(gh api "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
             --jq ".[] | select(.body | contains(\"${MARKER}\")) | .id" | head -1)
 
           if [ -n "$EXISTING" ]; then
-            gh api repos/${{ github.repository }}/issues/comments/${EXISTING} \
+            gh api "repos/${REPOSITORY}/issues/comments/${EXISTING}" \
               -X PATCH -f body="$COMMENT"
           else
-            gh pr comment $PR_NUMBER --body "$COMMENT"
+            gh pr comment "$PR_NUMBER" --body "$COMMENT"
           fi
         else
-          gh pr comment $PR_NUMBER --body "$COMMENT"
+          gh pr comment "$PR_NUMBER" --body "$COMMENT"
         fi
 
     - name: Check result
       shell: bash
+      env:
+        EXIT_CODE: ${{ steps.analyze.outputs.exit_code }}
+        FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+        FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
       run: |
-        EXIT_CODE=${{ steps.analyze.outputs.exit_code }}
-
-        if [ "$EXIT_CODE" = "2" ] && [ "${{ inputs.fail-on-error }}" = "true" ]; then
+        if [ "$EXIT_CODE" = "2" ] && [ "$FAIL_ON_ERROR" = "true" ]; then
           echo "::error::SQL analysis found errors"
           exit 1
         fi
 
-        if [ "$EXIT_CODE" = "1" ] && [ "${{ inputs.fail-on-warning }}" = "true" ]; then
+        if [ "$EXIT_CODE" = "1" ] && [ "$FAIL_ON_WARNING" = "true" ]; then
           echo "::warning::SQL analysis found warnings"
           exit 1
         fi

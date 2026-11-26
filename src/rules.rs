@@ -66,6 +66,7 @@
 //! }
 //! ```
 
+mod clickhouse;
 mod performance;
 pub mod schema_aware;
 mod security;
@@ -75,7 +76,11 @@ mod types;
 use rayon::prelude::*;
 pub use types::{AnalysisReport, RuleCategory, RuleInfo, Severity, Violation};
 
-use crate::{config::RulesConfig, query::Query, schema::Schema};
+use crate::{
+    config::RulesConfig,
+    query::{Query, SqlDialect},
+    schema::Schema
+};
 
 /// Trait for implementing SQL analysis rules.
 ///
@@ -156,7 +161,7 @@ pub trait Rule: Send + Sync {
 ///     ..Default::default()
 /// };
 ///
-/// let runner = RuleRunner::with_config(config);
+/// let runner = RuleRunner::with_config(&config);
 /// let queries = parse_queries("SELECT id FROM users", SqlDialect::Generic).unwrap();
 /// let report = runner.analyze(&queries);
 ///
@@ -175,8 +180,9 @@ impl Default for RuleRunner {
 
 impl RuleRunner {
     /// Create a new runner with all default rules
+    #[must_use]
     pub fn new() -> Self {
-        Self::with_config(RulesConfig::default())
+        Self::with_config(&RulesConfig::default())
     }
 
     /// Create a new runner with configuration
@@ -186,8 +192,19 @@ impl RuleRunner {
     /// - Performance rules (PERF001-PERF020) detect query optimization issues
     /// - Style rules (STYLE001-STYLE004) enforce best practices
     /// - Security rules (SEC001-SEC008) detect dangerous operations
-    pub fn with_config(config: RulesConfig) -> Self {
-        let all_rules: Vec<Box<dyn Rule>> = vec![
+    #[must_use]
+    pub fn with_config(config: &RulesConfig) -> Self {
+        Self::with_dialect_and_config(SqlDialect::Generic, config)
+    }
+
+    /// Create a new runner for a specific dialect with configuration.
+    ///
+    /// When the dialect is [`SqlDialect::ClickHouse`], ClickHouse-specific
+    /// query rules (CH001, CH004, CH009-CH011, CH013-CH014, CH016, CH019) are
+    /// registered in addition to the generic rules.
+    #[must_use]
+    pub fn with_dialect_and_config(dialect: SqlDialect, config: &RulesConfig) -> Self {
+        let mut all_rules: Vec<Box<dyn Rule>> = vec![
             Box::new(performance::SelectStarWithoutLimit),
             Box::new(performance::LeadingWildcard),
             Box::new(performance::OrInsteadOfIn),
@@ -219,6 +236,21 @@ impl RuleRunner {
             Box::new(security::PrivilegeChange),
             Box::new(security::DynamicSqlExecution),
         ];
+        if dialect == SqlDialect::ClickHouse {
+            let ch_rules: Vec<Box<dyn Rule>> = vec![
+                Box::new(clickhouse::SelectStarWideTable),
+                Box::new(clickhouse::FunctionOnKeyColumn),
+                Box::new(clickhouse::UniqExactUsage),
+                Box::new(clickhouse::CountIfOpportunity),
+                Box::new(clickhouse::OrderByInSubquery),
+                Box::new(clickhouse::JoinBigTables),
+                Box::new(clickhouse::FinalUsage),
+                Box::new(clickhouse::PrewhereOpportunity),
+                Box::new(clickhouse::HeavyMutation),
+                Box::new(clickhouse::ManualOptimizeFinal),
+            ];
+            all_rules.extend(ch_rules);
+        }
         let rules: Vec<Box<dyn Rule>> = all_rules
             .into_iter()
             .filter(|r| {
@@ -243,23 +275,65 @@ impl RuleRunner {
         }
     }
 
-    /// Create runner with schema-aware rules and configuration
+    /// Create runner with schema-aware rules for a specific dialect.
+    ///
+    /// When the dialect is [`SqlDialect::ClickHouse`], `ClickHouse`
+    /// schema-aware rules (CH002-CH003, CH005-CH007, CH012) are registered too.
     ///
     /// # Notes
     ///
-    /// - Adds schema-aware rules (SCHEMA001-SCHEMA004) if not disabled
-    /// - Updates severity cache for schema rules
-    pub fn with_schema_and_config(schema: Schema, config: RulesConfig) -> Self {
-        let mut runner = Self::with_config(config.clone());
-        let schema_rules: Vec<Box<dyn Rule>> = vec![
-            Box::new(schema_aware::MissingIndexOnFilterColumn::new(
-                schema.clone()
-            )),
+    /// OLTP-style index suggestions (`CREATE INDEX`) do not apply to
+    /// `ClickHouse`'s sparse primary key; the CH002/CH005 rules cover that
+    /// dialect instead.
+    #[must_use]
+    pub fn with_schema_and_config_and_dialect(
+        dialect: SqlDialect,
+        schema: Schema,
+        config: &RulesConfig
+    ) -> Self {
+        let mut runner = Self::with_dialect_and_config(dialect, config);
+        let mut schema_rules: Vec<Box<dyn Rule>> = vec![
             Box::new(schema_aware::ColumnNotInSchema::new(schema.clone())),
-            Box::new(schema_aware::SuggestIndex::new(schema.clone())),
-            Box::new(schema_aware::JoinOnNonIndexedColumn::new(schema.clone())),
-            Box::new(schema_aware::ImplicitTypeConversion::new(schema)),
+            Box::new(schema_aware::ImplicitTypeConversion::new(schema.clone())),
         ];
+        if dialect == SqlDialect::ClickHouse {
+            let ch_schema_rules: Vec<Box<dyn Rule>> = vec![
+                Box::new(clickhouse::FilterNotUsingPrimaryKey {
+                    schema: schema.clone()
+                }),
+                Box::new(clickhouse::PartitionPruningMissed {
+                    schema: schema.clone()
+                }),
+                Box::new(clickhouse::MissingSkipIndex {
+                    schema: schema.clone()
+                }),
+                Box::new(clickhouse::LowCardinalityHighCardinality {
+                    schema: schema.clone()
+                }),
+                Box::new(clickhouse::NullableHotPath {
+                    schema: schema.clone()
+                }),
+                Box::new(clickhouse::GroupByOrderMismatch {
+                    schema: schema.clone()
+                }),
+                Box::new(clickhouse::DictionaryLookupOpportunity {
+                    schema: schema.clone()
+                }),
+                Box::new(clickhouse::GroupByStringKey {
+                    schema
+                }),
+            ];
+            schema_rules.extend(ch_schema_rules);
+        } else {
+            let oltp_rules: Vec<Box<dyn Rule>> = vec![
+                Box::new(schema_aware::MissingIndexOnFilterColumn::new(
+                    schema.clone()
+                )),
+                Box::new(schema_aware::SuggestIndex::new(schema.clone())),
+                Box::new(schema_aware::JoinOnNonIndexedColumn::new(schema)),
+            ];
+            schema_rules.extend(oltp_rules);
+        }
         for rule in schema_rules {
             if !config
                 .disabled

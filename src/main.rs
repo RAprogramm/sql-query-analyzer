@@ -17,7 +17,7 @@
 //!    Style, or Security, each with configurable severity levels.
 //!
 //! 2. **LLM Analysis** (optional) - When API credentials are provided, queries
-//!    are sent to OpenAI, Anthropic, or a local Ollama instance for deeper
+//!    are sent to `OpenAI`, Anthropic, or a local Ollama instance for deeper
 //!    semantic analysis and optimization suggestions.
 //!
 //! # Quick Start
@@ -128,7 +128,7 @@
 //! - [`rules`] - Static analysis rule engine and built-in rules
 //! - [`query`] - SQL parsing and query metadata extraction
 //! - [`schema`] - Database schema parsing and representation
-//! - [`llm`] - LLM provider integrations (OpenAI, Anthropic, Ollama)
+//! - [`llm`] - LLM provider integrations (`OpenAI`, Anthropic, Ollama)
 //! - [`config`] - Configuration loading and validation
 //! - [`output`] - Result formatting for various output formats
 //! - [`cache`] - Query parsing cache for performance
@@ -181,7 +181,7 @@ async fn run(command: Commands) -> AppResult<CommandOutput> {
 
 fn print_output(output: &CommandOutput) {
     for line in &output.stdout {
-        println!("{}", line);
+        println!("{line}");
     }
 }
 

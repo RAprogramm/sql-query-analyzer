@@ -8,7 +8,7 @@ use sql_query_analyzer::error::{
 #[test]
 fn test_file_read_error() {
     let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
-    let error = file_read_error("/path/to/file.sql", io_error);
+    let error = file_read_error("/path/to/file.sql", &io_error);
     let _msg = error.to_string();
 }
 
@@ -66,8 +66,8 @@ fn test_error_types_are_different() {
     let query_err = query_parse_error("test");
     let llm_err = llm_api_error("test");
     let config_err = config_error("test");
-    assert!(!schema_err.to_string().is_empty());
-    assert!(!query_err.to_string().is_empty());
-    assert!(!llm_err.to_string().is_empty());
-    assert!(!config_err.to_string().is_empty());
+    assert_ne!(schema_err.to_string(), "");
+    assert_ne!(query_err.to_string(), "");
+    assert_ne!(llm_err.to_string(), "");
+    assert_ne!(config_err.to_string(), "");
 }

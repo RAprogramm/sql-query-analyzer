@@ -6,11 +6,23 @@
 //!
 //! # Supported Providers
 //!
-//! | Provider | Endpoint | Authentication |
-//! |----------|----------|----------------|
-//! | OpenAI | `api.openai.com` | Bearer token |
-//! | Anthropic | `api.anthropic.com` | x-api-key header |
+//! | Provider | Default Endpoint | Authentication |
+//! |----------|------------------|----------------|
+//! | `OpenAI` | `api.openai.com` (overridable) | Bearer token |
+//! | Anthropic | `api.anthropic.com` (overridable) | x-api-key header |
 //! | Ollama | Local (configurable) | None |
+//!
+//! # Custom Endpoints
+//!
+//! `OpenAI` and Anthropic accept an optional `base_url` override, enabling
+//! Azure `OpenAI`, self-hosted gateways, OpenAI-compatible proxies, and local
+//! servers (llama.cpp, Ollama, vLLM, LM Studio, `LocalAI`). When `base_url` is
+//! `None` the official endpoint is used.
+//!
+//! The override accepts either convention used across the ecosystem: a bare
+//! host (`http://127.0.0.1:8080`) or one that already ends in `/v1`
+//! (`http://127.0.0.1:8080/v1`, the form used by the `OpenAI` SDK and most local
+//! servers). A duplicated `/v1` segment is never produced.
 //!
 //! # Retry Behavior
 //!
@@ -44,29 +56,53 @@ use tokio::time::sleep;
 
 use crate::{
     config::RetryConfig,
-    error::{AppResult, http_error, llm_api_error}
+    error::{AppResult, http_error, llm_api_error},
+    query::SqlDialect
 };
+
+/// Prompt guidance for generic/OLTP dialects.
+const GENERIC_PROMPT: &str = "You are a database performance expert. Analyze the following SQL \
+                              queries for potential performance issues, especially regarding index \
+                              usage.";
+
+/// Prompt guidance for the `ClickHouse` dialect.
+const CLICKHOUSE_PROMPT: &str = "You are a ClickHouse performance expert. Analyze the following \
+                                 queries against a columnar OLAP store. Focus on: ORDER BY / \
+                                 primary-key prefix usage, partition pruning (PARTITION BY), data \
+                                 skipping indexes, avoiding SELECT * and FINAL, LowCardinality and \
+                                 Nullable choices, uniq vs uniqExact, countIf vs subqueries, and \
+                                 JOIN strategy (dictionaries/denormalization).";
+
+/// Default `OpenAI` API base URL used when no override is provided.
+const OPENAI_BASE_URL: &str = "https://api.openai.com";
+
+/// Default Anthropic API base URL used when no override is provided.
+const ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
 
 /// LLM provider configuration with authentication credentials.
 #[derive(Debug, Clone)]
 pub enum LlmProvider {
-    /// OpenAI API (GPT-4, GPT-3.5, etc.)
+    /// `OpenAI` API (GPT-4, GPT-3.5, etc.)
     OpenAI {
         /// API key (sk-...)
-        api_key: String,
+        api_key:  String,
         /// Model identifier (e.g., "gpt-4", "gpt-3.5-turbo")
-        model:   String
+        model:    String,
+        /// Optional base URL override for Azure/proxy/compatible endpoints.
+        base_url: Option<String>
     },
     /// Anthropic API (Claude models)
     Anthropic {
         /// API key
-        api_key: String,
+        api_key:  String,
         /// Model identifier (e.g., "claude-sonnet-4-20250514")
-        model:   String
+        model:    String,
+        /// Optional base URL override for gateways and test servers.
+        base_url: Option<String>
     },
     /// Local Ollama instance
     Ollama {
-        /// Base URL (e.g., "http://localhost:11434")
+        /// Base URL (e.g., "<http://localhost:11434>")
         base_url: String,
         /// Model name (e.g., "llama3.2", "codellama")
         model:    String
@@ -145,14 +181,49 @@ struct OllamaResponse {
     response: String
 }
 
+/// Joins a base URL with an endpoint path without duplicating a `/v1` segment.
+///
+/// Accepts both ecosystem conventions: a bare host (`http://host:port`) or one
+/// already ending in `/v1` (`http://host:port/v1`). Trailing slashes are ignored.
+fn join_endpoint(base: &str, path: &str) -> String {
+    let base = base.trim_end_matches('/');
+    let path = path.trim_start_matches('/');
+    if let Some(rest) = path.strip_prefix("v1/")
+        && base.ends_with("/v1")
+    {
+        return format!("{base}/{rest}");
+    }
+    format!("{base}/{path}")
+}
+
+/// Build the analysis prompt for a dialect, embedding schema and query
+/// summaries.
+fn build_prompt(schema_summary: &str, queries_summary: &str, dialect: SqlDialect) -> String {
+    let guidance = match dialect {
+        SqlDialect::ClickHouse => CLICKHOUSE_PROMPT,
+        _ => GENERIC_PROMPT
+    };
+    format!(
+        "{guidance}\n\n{schema_summary}\n\n{queries_summary}\n\n\
+         For each query, identify:\n\
+         1. Whether the existing schema design is used effectively\n\
+         2. Missing schema features that would improve performance\n\
+         3. Full scans or inefficient operations\n\
+         4. Suggestions for query optimization\n\
+         Provide specific, actionable recommendations."
+    )
+}
+
 impl LlmClient {
     /// Create new LLM client with default retry configuration
     #[allow(dead_code)]
+    #[must_use]
     pub fn new(provider: LlmProvider) -> Self {
         Self::with_retry_config(provider, RetryConfig::default())
     }
 
     /// Create new LLM client with custom retry configuration
+    #[must_use]
     pub fn with_retry_config(provider: LlmProvider, retry_config: RetryConfig) -> Self {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(120))
@@ -166,20 +237,18 @@ impl LlmClient {
     }
 
     /// Analyze SQL queries using LLM with automatic retry
-    pub async fn analyze(&self, schema_summary: &str, queries_summary: &str) -> AppResult<String> {
-        let prompt = format!(
-            "You are a database performance expert. Analyze the following SQL queries \
-             for potential performance issues, especially regarding index usage.\n\n\
-             {schema}\n\n{queries}\n\n\
-             For each query, identify:\n\
-             1. Whether existing indexes can be used effectively\n\
-             2. Missing indexes that would improve performance\n\
-             3. Full table scans or inefficient operations\n\
-             4. Suggestions for query optimization\n\
-             Provide specific, actionable recommendations.",
-            schema = schema_summary,
-            queries = queries_summary
-        );
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::AppError`] if the provider request fails after
+    /// all retry attempts, or if the response cannot be parsed.
+    pub async fn analyze(
+        &self,
+        schema_summary: &str,
+        queries_summary: &str,
+        dialect: SqlDialect
+    ) -> AppResult<String> {
+        let prompt = build_prompt(schema_summary, queries_summary, dialect);
         self.call_with_retry(&prompt).await
     }
 
@@ -195,13 +264,14 @@ impl LlmClient {
                     delay
                 );
                 sleep(Duration::from_millis(delay)).await;
-                delay = ((delay as f64 * self.retry_config.backoff_factor) as u64)
+                delay = delay
+                    .saturating_mul(u64::from(self.retry_config.backoff_factor))
                     .min(self.retry_config.max_delay_ms);
             }
             match self.call_provider(prompt).await {
                 Ok(result) => return Ok(result),
                 Err(e) => {
-                    if self.is_retryable_error(&e) {
+                    if Self::is_retryable_error(&e) {
                         last_error = Some(e);
                         continue;
                     }
@@ -212,7 +282,7 @@ impl LlmClient {
         Err(last_error.unwrap_or_else(|| llm_api_error("All retry attempts failed")))
     }
 
-    fn is_retryable_error(&self, error: &masterror::AppError) -> bool {
+    fn is_retryable_error(error: &masterror::AppError) -> bool {
         let msg = error.to_string().to_lowercase();
         msg.contains("timeout")
             || msg.contains("connection")
@@ -228,12 +298,20 @@ impl LlmClient {
         match &self.provider {
             LlmProvider::OpenAI {
                 api_key,
-                model
-            } => self.call_openai(api_key, model, prompt).await,
+                model,
+                base_url
+            } => {
+                self.call_openai(api_key, model, base_url.as_deref(), prompt)
+                    .await
+            }
             LlmProvider::Anthropic {
                 api_key,
-                model
-            } => self.call_anthropic(api_key, model, prompt).await,
+                model,
+                base_url
+            } => {
+                self.call_anthropic(api_key, model, base_url.as_deref(), prompt)
+                    .await
+            }
             LlmProvider::Ollama {
                 base_url,
                 model
@@ -241,7 +319,14 @@ impl LlmClient {
         }
     }
 
-    async fn call_openai(&self, api_key: &str, model: &str, prompt: &str) -> AppResult<String> {
+    async fn call_openai(
+        &self,
+        api_key: &str,
+        model: &str,
+        base_url: Option<&str>,
+        prompt: &str
+    ) -> AppResult<String> {
+        let base = base_url.unwrap_or(OPENAI_BASE_URL);
         let request = OpenAIRequest {
             model:    model.to_string(),
             messages: vec![OpenAIRequestMessage {
@@ -251,21 +336,18 @@ impl LlmClient {
         };
         let response = self
             .client
-            .post("https://api.openai.com/v1/chat/completions")
-            .header("Authorization", format!("Bearer {}", api_key))
+            .post(join_endpoint(base, "v1/chat/completions"))
+            .header("Authorization", format!("Bearer {api_key}"))
             .json(&request)
             .send()
             .await
-            .map_err(http_error)?;
+            .map_err(|e| http_error(&e))?;
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
-            return Err(llm_api_error(format!(
-                "OpenAI API error {}: {}",
-                status, text
-            )));
+            return Err(llm_api_error(format!("OpenAI API error {status}: {text}")));
         }
-        let result: OpenAIResponse = response.json().await.map_err(http_error)?;
+        let result: OpenAIResponse = response.json().await.map_err(|e| http_error(&e))?;
         result
             .choices
             .first()
@@ -273,7 +355,14 @@ impl LlmClient {
             .ok_or_else(|| llm_api_error("Empty response from OpenAI"))
     }
 
-    async fn call_anthropic(&self, api_key: &str, model: &str, prompt: &str) -> AppResult<String> {
+    async fn call_anthropic(
+        &self,
+        api_key: &str,
+        model: &str,
+        base_url: Option<&str>,
+        prompt: &str
+    ) -> AppResult<String> {
+        let base = base_url.unwrap_or(ANTHROPIC_BASE_URL);
         let request = AnthropicRequest {
             model:      model.to_string(),
             max_tokens: 4096,
@@ -284,22 +373,21 @@ impl LlmClient {
         };
         let response = self
             .client
-            .post("https://api.anthropic.com/v1/messages")
+            .post(join_endpoint(base, "v1/messages"))
             .header("x-api-key", api_key)
             .header("anthropic-version", "2023-06-01")
             .json(&request)
             .send()
             .await
-            .map_err(http_error)?;
+            .map_err(|e| http_error(&e))?;
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
             return Err(llm_api_error(format!(
-                "Anthropic API error {}: {}",
-                status, text
+                "Anthropic API error {status}: {text}"
             )));
         }
-        let result: AnthropicResponse = response.json().await.map_err(http_error)?;
+        let result: AnthropicResponse = response.json().await.map_err(|e| http_error(&e))?;
         result
             .content
             .first()
@@ -320,16 +408,363 @@ impl LlmClient {
             .json(&request)
             .send()
             .await
-            .map_err(http_error)?;
+            .map_err(|e| http_error(&e))?;
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
-            return Err(llm_api_error(format!(
-                "Ollama API error {}: {}",
-                status, text
-            )));
+            return Err(llm_api_error(format!("Ollama API error {status}: {text}")));
         }
-        let result: OllamaResponse = response.json().await.map_err(http_error)?;
+        let result: OllamaResponse = response.json().await.map_err(|e| http_error(&e))?;
         Ok(result.response)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener
+    };
+
+    use super::*;
+
+    fn no_retry() -> RetryConfig {
+        RetryConfig {
+            max_retries:      0,
+            initial_delay_ms: 1,
+            max_delay_ms:     1,
+            backoff_factor:   1
+        }
+    }
+
+    /// Start a one-shot mock HTTP server returning `status` and `body`.
+    async fn mock_server(status: &'static str, body: &'static str) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            if let Ok((mut sock, _)) = listener.accept().await {
+                let mut buf = [0u8; 8192];
+                let _ = sock.read(&mut buf).await;
+                let resp = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = sock.write_all(resp.as_bytes()).await;
+                let _ = sock.shutdown().await;
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    #[test]
+    fn build_prompt_clickhouse_has_columnar_guidance() {
+        let p = build_prompt("schema", "queries", SqlDialect::ClickHouse);
+        assert!(p.contains("ClickHouse"));
+        assert!(p.contains("schema"));
+        assert!(p.contains("queries"));
+    }
+
+    #[test]
+    fn build_prompt_generic_uses_oltp_guidance() {
+        let p = build_prompt("s", "q", SqlDialect::Generic);
+        assert!(p.contains("index"));
+        assert!(!p.contains("columnar"));
+    }
+
+    #[test]
+    fn retryable_error_detection() {
+        assert!(LlmClient::is_retryable_error(&llm_api_error(
+            "connection refused"
+        )));
+        assert!(LlmClient::is_retryable_error(&llm_api_error(
+            "HTTP 429 rate limit"
+        )));
+        assert!(LlmClient::is_retryable_error(&llm_api_error("server 503")));
+        assert!(!LlmClient::is_retryable_error(&llm_api_error(
+            "bad request 400"
+        )));
+    }
+
+    #[test]
+    fn response_structs_parse() {
+        let o: OllamaResponse = serde_json::from_str(r#"{"response":"hi"}"#).unwrap();
+        assert_eq!(o.response, "hi");
+        let a: OpenAIResponse =
+            serde_json::from_str(r#"{"choices":[{"message":{"content":"yo"}}]}"#).unwrap();
+        assert_eq!(a.choices[0].message.content, "yo");
+        let an: AnthropicResponse =
+            serde_json::from_str(r#"{"content":[{"text":"hey"}]}"#).unwrap();
+        assert_eq!(an.content[0].text, "hey");
+    }
+
+    #[tokio::test]
+    async fn ollama_success_returns_text() {
+        let base = mock_server("200 OK", r#"{"response":"analysis result"}"#).await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Ollama {
+                base_url: base,
+                model:    "m".into()
+            },
+            no_retry()
+        );
+        let out = client
+            .analyze("schema", "queries", SqlDialect::ClickHouse)
+            .await
+            .unwrap();
+        assert_eq!(out, "analysis result");
+    }
+
+    #[tokio::test]
+    async fn ollama_error_status_is_returned() {
+        let base = mock_server("500 Internal Server Error", "boom").await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Ollama {
+                base_url: base,
+                model:    "m".into()
+            },
+            no_retry()
+        );
+        let err = client
+            .analyze("s", "q", SqlDialect::Generic)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("500"));
+    }
+
+    #[tokio::test]
+    async fn connection_failure_is_reported() {
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Ollama {
+                base_url: "http://127.0.0.1:1".into(),
+                model:    "m".into()
+            },
+            no_retry()
+        );
+        assert!(client.analyze("s", "q", SqlDialect::Generic).await.is_err());
+    }
+
+    #[test]
+    fn join_endpoint_handles_both_base_url_conventions() {
+        assert_eq!(
+            join_endpoint("http://h:8080", "v1/chat/completions"),
+            "http://h:8080/v1/chat/completions"
+        );
+        assert_eq!(
+            join_endpoint("http://h:8080/v1", "v1/chat/completions"),
+            "http://h:8080/v1/chat/completions"
+        );
+        assert_eq!(
+            join_endpoint("http://h:8080/v1/", "v1/chat/completions"),
+            "http://h:8080/v1/chat/completions"
+        );
+        assert_eq!(
+            join_endpoint("http://h:8080", "v1/messages"),
+            "http://h:8080/v1/messages"
+        );
+        assert_eq!(
+            join_endpoint("http://h:8080/v1", "v1/messages"),
+            "http://h:8080/v1/messages"
+        );
+    }
+
+    #[tokio::test]
+    async fn openai_success_via_base_url_override() {
+        let base = mock_server(
+            "200 OK",
+            r#"{"choices":[{"message":{"content":"openai result"}}]}"#
+        )
+        .await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::OpenAI {
+                api_key:  "sk-test".into(),
+                model:    "gpt-4".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let out = client.analyze("s", "q", SqlDialect::Generic).await.unwrap();
+        assert_eq!(out, "openai result");
+    }
+
+    #[tokio::test]
+    async fn openai_error_status_is_returned() {
+        let base = mock_server("401 Unauthorized", r#"{"error":"bad key"}"#).await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::OpenAI {
+                api_key:  "sk-bad".into(),
+                model:    "gpt-4".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let err = client
+            .analyze("s", "q", SqlDialect::Generic)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("401"));
+    }
+
+    #[tokio::test]
+    async fn anthropic_success_via_base_url_override() {
+        let base = mock_server("200 OK", r#"{"content":[{"text":"anthropic result"}]}"#).await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Anthropic {
+                api_key:  "sk-ant".into(),
+                model:    "claude-3".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let out = client.analyze("s", "q", SqlDialect::Generic).await.unwrap();
+        assert_eq!(out, "anthropic result");
+    }
+
+    #[tokio::test]
+    async fn anthropic_error_status_is_returned() {
+        let base = mock_server("429 Too Many Requests", "slow down").await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Anthropic {
+                api_key:  "sk-ant".into(),
+                model:    "claude-3".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let err = client
+            .analyze("s", "q", SqlDialect::Generic)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("429"));
+    }
+
+    #[test]
+    fn new_uses_default_retry_config() {
+        let client = LlmClient::new(LlmProvider::Ollama {
+            base_url: "http://127.0.0.1:1".into(),
+            model:    "m".into()
+        });
+        assert_eq!(client.retry_config.max_retries, 3);
+    }
+
+    #[tokio::test]
+    async fn openai_success_returns_message_content() {
+        let base = mock_server(
+            "200 OK",
+            r#"{"choices":[{"message":{"content":"openai answer"}}]}"#
+        )
+        .await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::OpenAI {
+                api_key:  "sk-test".into(),
+                model:    "gpt-4".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let out = client
+            .analyze("schema", "queries", SqlDialect::Generic)
+            .await
+            .unwrap();
+        assert_eq!(out, "openai answer");
+    }
+
+    #[tokio::test]
+    async fn openai_empty_choices_is_error() {
+        let base = mock_server("200 OK", r#"{"choices":[]}"#).await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::OpenAI {
+                api_key:  "sk-test".into(),
+                model:    "gpt-4".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let err = client
+            .analyze("s", "q", SqlDialect::Generic)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("Empty response from OpenAI"));
+    }
+
+    #[tokio::test]
+    async fn anthropic_success_returns_text() {
+        let base = mock_server("200 OK", r#"{"content":[{"text":"claude answer"}]}"#).await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Anthropic {
+                api_key:  "sk-ant".into(),
+                model:    "claude-3".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let out = client
+            .analyze("schema", "queries", SqlDialect::PostgreSQL)
+            .await
+            .unwrap();
+        assert_eq!(out, "claude answer");
+    }
+
+    #[tokio::test]
+    async fn anthropic_empty_content_is_error() {
+        let base = mock_server("200 OK", r#"{"content":[]}"#).await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Anthropic {
+                api_key:  "sk-ant".into(),
+                model:    "claude-3".into(),
+                base_url: Some(base)
+            },
+            no_retry()
+        );
+        let err = client
+            .analyze("s", "q", SqlDialect::Generic)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("Empty response from Anthropic"));
+    }
+
+    /// Start a mock HTTP server answering successive connections in order.
+    async fn mock_server_seq(responses: &[(&'static str, &'static str)]) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let responses = responses.to_vec();
+        tokio::spawn(async move {
+            for (status, body) in responses {
+                let Ok((mut sock, _)) = listener.accept().await else {
+                    continue;
+                };
+                let mut buf = [0u8; 8192];
+                let _ = sock.read(&mut buf).await;
+                let resp = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = sock.write_all(resp.as_bytes()).await;
+                let _ = sock.shutdown().await;
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    #[tokio::test]
+    async fn retry_recovers_after_transient_server_error() {
+        let base = mock_server_seq(&[
+            ("500 Internal Server Error", "boom"),
+            ("200 OK", r#"{"response":"recovered"}"#)
+        ])
+        .await;
+        let client = LlmClient::with_retry_config(
+            LlmProvider::Ollama {
+                base_url: base,
+                model:    "m".into()
+            },
+            RetryConfig {
+                max_retries:      1,
+                initial_delay_ms: 1,
+                max_delay_ms:     2,
+                backoff_factor:   2
+            }
+        );
+        let out = client.analyze("s", "q", SqlDialect::Generic).await.unwrap();
+        assert_eq!(out, "recovered");
     }
 }

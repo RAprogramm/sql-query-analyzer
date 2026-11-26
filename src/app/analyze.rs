@@ -86,14 +86,18 @@ use crate::{
 /// ```
 pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<AnalyzeResult> {
     let schema_sql = read_to_string(&params.schema_path)
-        .map_err(|e| file_read_error(&params.schema_path, e))?;
+        .map_err(|e| file_read_error(&params.schema_path, &e))?;
     let queries_sql = read_queries_input(&params.queries_path)?;
     let sql_dialect = convert_dialect(params.dialect);
     let parsed_schema = Schema::parse(&schema_sql, sql_dialect)?;
     let parsed_queries = parse_queries_cached(&queries_sql, sql_dialect)?;
     let schema_summary = parsed_schema.to_summary();
     let output_opts = create_output_options(params.output_format, params.no_color, params.verbose);
-    let runner = RuleRunner::with_schema_and_config(parsed_schema.clone(), config.rules.clone());
+    let runner = RuleRunner::with_schema_and_config_and_dialect(
+        sql_dialect,
+        parsed_schema.clone(),
+        &config.rules
+    );
     let static_report = runner.analyze(&parsed_queries);
     let static_output = format_static_analysis(&static_report, &output_opts);
     let exit_code = calculate_exit_code(&static_report);
@@ -109,10 +113,10 @@ pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<Ana
             })
         });
     }
-    let effective_api_key = params.api_key.or(config.llm.api_key.clone());
+    let effective_api_key = params.api_key.or_else(|| config.llm.api_key.clone());
     let effective_ollama_url =
         get_effective_ollama_url(params.ollama_url, config.llm.ollama_url.clone());
-    if !has_llm_access(&effective_api_key, &params.provider) {
+    if !has_llm_access(effective_api_key.as_ref(), params.provider) {
         return Ok(AnalyzeResult {
             exit_code,
             static_output,
@@ -120,7 +124,7 @@ pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<Ana
             dry_run_info: None
         });
     }
-    let model_name = get_effective_model(params.model, config.llm.model.clone(), &params.provider);
+    let model_name = get_effective_model(params.model, config.llm.model.clone(), params.provider);
     let llm_provider = build_llm_provider(
         params.provider,
         effective_api_key,
@@ -135,7 +139,9 @@ pub async fn run_analyze(params: AnalyzeParams, config: Config) -> AppResult<Ana
     pb.enable_steady_tick(Duration::from_millis(100));
     let queries_summary = format_queries_summary(&parsed_queries, &output_opts);
     let client = LlmClient::with_retry_config(llm_provider, config.retry);
-    let analysis = client.analyze(&schema_summary, &queries_summary).await?;
+    let analysis = client
+        .analyze(&schema_summary, &queries_summary, sql_dialect)
+        .await?;
     pb.finish_and_clear();
     let llm_output = format_analysis_result(&parsed_queries, &analysis, &output_opts);
     Ok(AnalyzeResult {

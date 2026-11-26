@@ -32,7 +32,7 @@ fn make_violation(
         severity,
         category: RuleCategory::Performance,
         query_index,
-        suggestion: suggestion.map(|s| s.to_string())
+        suggestion: suggestion.map(std::string::ToString::to_string)
     }
 }
 
@@ -437,7 +437,7 @@ fn test_format_static_analysis_multiple_queries() {
 #[test]
 fn test_output_format_debug() {
     let format = OutputFormat::Text;
-    let debug = format!("{:?}", format);
+    let debug = format!("{format:?}");
     assert!(debug.contains("Text"));
 }
 
@@ -451,7 +451,7 @@ fn test_output_format_copy() {
 #[test]
 fn test_output_options_debug() {
     let opts = OutputOptions::default();
-    let debug = format!("{:?}", opts);
+    let debug = format!("{opts:?}");
     assert!(debug.contains("OutputOptions"));
 }
 
@@ -462,7 +462,7 @@ fn test_output_options_clone() {
         colored: false,
         verbose: true
     };
-    let cloned = opts.clone();
+    let cloned = opts;
     assert!(matches!(cloned.format, OutputFormat::Yaml));
     assert!(!cloned.colored);
     assert!(cloned.verbose);
@@ -474,7 +474,7 @@ fn test_analysis_result_debug() {
         queries:  vec![],
         analysis: "test".to_string()
     };
-    let debug = format!("{:?}", result);
+    let debug = format!("{result:?}");
     assert!(debug.contains("AnalysisResult"));
 }
 
@@ -736,4 +736,85 @@ fn test_analysis_report_counts() {
     assert_eq!(report.error_count(), 2);
     assert_eq!(report.warning_count(), 1);
     assert_eq!(report.info_count(), 3);
+}
+
+#[test]
+fn test_yaml_top_level_scalars_and_empty_containers() {
+    use sql_query_analyzer::output::yaml::to_string;
+    assert_eq!(to_string(&serde_json::json!("plain")).unwrap(), "plain\n");
+    assert_eq!(to_string(&serde_json::json!([])).unwrap(), "[]\n");
+    assert_eq!(to_string(&serde_json::json!({})).unwrap(), "{}\n");
+    assert_eq!(to_string(&serde_json::json!(null)).unwrap(), "null\n");
+}
+
+#[test]
+fn test_yaml_nested_empty_containers() {
+    use sql_query_analyzer::output::yaml::to_string;
+    let out = to_string(&serde_json::json!({"list": [], "map": {}})).unwrap();
+    assert!(out.contains("list: []"), "{out}");
+    assert!(out.contains("map: {}"), "{out}");
+    let nested = to_string(&serde_json::json!([[], {"a": 1}])).unwrap();
+    assert!(nested.contains("- []"), "{nested}");
+}
+
+#[test]
+fn test_yaml_quotes_ambiguous_keys() {
+    use sql_query_analyzer::output::yaml::to_string;
+    let out = to_string(&serde_json::json!({"true": 1, "42": 2, "a: b": 3})).unwrap();
+    assert!(out.contains("\"true\": 1"), "{out}");
+    assert!(out.contains("\"42\": 2"), "{out}");
+    assert!(out.contains("\"a: b\": 3"), "{out}");
+}
+
+#[test]
+fn test_yaml_escapes_special_string_values() {
+    use sql_query_analyzer::output::yaml::to_string;
+    let out = to_string(&serde_json::json!({
+        "quote": "say \"hi\"",
+        "back": "a\\b",
+        "line": "a\nb",
+        "ctrl": "a\u{7}b"
+    }))
+    .unwrap();
+    assert!(out.contains("\"say \\\"hi\\\"\""), "{out}");
+    assert!(out.contains("back: a\\b"), "{out}");
+    assert!(out.contains("\"a\\nb\""), "{out}");
+    assert!(out.contains("\"a\\u0007b\""), "{out}");
+}
+
+#[test]
+fn test_yaml_roundtrip_parse_and_compare() {
+    use sql_query_analyzer::output::yaml::to_string;
+    let value = serde_json::json!({
+        "outer": {"a": 1},
+        "violations": [{"rule": "CH001", "message": "prefer max_bytes 10000000"}],
+        "list": [],
+        "map": {},
+        "quote": "say \"hi\"",
+        "line": "a\nb"
+    });
+    let out = to_string(&value).unwrap();
+    let parsed: serde_json::Value = yaml_serde::from_str(&out).unwrap();
+    assert_eq!(parsed, value);
+}
+
+#[test]
+fn test_yaml_roundtrip_top_level_scalars() {
+    use sql_query_analyzer::output::yaml::to_string;
+    for value in [
+        serde_json::json!("plain"),
+        serde_json::json!(42),
+        serde_json::json!(true),
+        serde_json::json!(null)
+    ] {
+        let out = to_string(&value).unwrap();
+        let parsed: serde_json::Value = yaml_serde::from_str(&out).unwrap();
+        assert_eq!(parsed, value);
+    }
+}
+
+#[test]
+fn test_yaml_inlined_block_mapping_is_not_valid_yaml() {
+    assert!(yaml_serde::from_str::<serde_json::Value>("outer:  a: 1\n").is_err());
+    assert!(yaml_serde::from_str::<serde_json::Value>("violations:  - rule: CH001\n").is_err());
 }

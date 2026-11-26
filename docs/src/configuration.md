@@ -25,7 +25,7 @@ model = "gpt-4"
 max_retries = 3
 initial_delay_ms = 500
 max_delay_ms = 8000
-backoff_factor = 2.0
+backoff_factor = 2
 
 [rules]
 # Disable rules by ID
@@ -36,6 +36,12 @@ disabled = ["STYLE001", "PERF010"]
 PERF001 = "error"
 SEC003 = "warning"
 ```
+
+`backoff_factor` is an integer multiplier applied to `initial_delay_ms`
+between retries. It used to accept floats (`2.0`); since 0.17 the field is
+an integer, so configuration files that still write a float value must be
+updated to the integer form (`2`) or loading fails with a deserialization
+error.
 
 ## Environment variables
 

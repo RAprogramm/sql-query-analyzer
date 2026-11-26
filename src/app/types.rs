@@ -42,7 +42,7 @@ pub struct AnalyzeParams {
     pub queries_path:  String,
     /// LLM provider for AI-powered analysis.
     pub provider:      Provider,
-    /// API key for cloud LLM providers (OpenAI, Anthropic).
+    /// API key for cloud LLM providers (`OpenAI`, Anthropic).
     pub api_key:       Option<String>,
     /// Model name to use for LLM analysis.
     pub model:         Option<String>,
@@ -137,7 +137,7 @@ mod tests {
             dry_run:       false,
             no_color:      false
         };
-        assert!(format!("{:?}", params).contains("AnalyzeParams"));
+        assert!(format!("{params:?}").contains("AnalyzeParams"));
     }
 
     #[test]
@@ -167,7 +167,7 @@ mod tests {
             llm_output:    None,
             dry_run_info:  None
         };
-        assert!(format!("{:?}", result).contains("AnalyzeResult"));
+        assert!(format!("{result:?}").contains("AnalyzeResult"));
     }
 
     #[test]
@@ -176,7 +176,7 @@ mod tests {
             schema_summary:  "schema".to_string(),
             queries_summary: "queries".to_string()
         };
-        assert!(format!("{:?}", info).contains("DryRunInfo"));
+        assert!(format!("{info:?}").contains("DryRunInfo"));
     }
 
     #[test]
@@ -185,7 +185,7 @@ mod tests {
             exit_code: 0,
             stdout:    vec!["line1".to_string()]
         };
-        assert!(format!("{:?}", output).contains("CommandOutput"));
+        assert!(format!("{output:?}").contains("CommandOutput"));
     }
 
     #[test]
@@ -194,7 +194,7 @@ mod tests {
             exit_code: 1,
             stdout:    vec!["error".to_string()]
         };
-        let cloned = output.clone();
+        let cloned = output;
         assert_eq!(cloned.exit_code, 1);
         assert_eq!(cloned.stdout.len(), 1);
     }

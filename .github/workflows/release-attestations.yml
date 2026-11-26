@@ -1,0 +1,100 @@
+# SPDX-FileCopyrightText: 2026 RAprogramm <andrey.rozanov.vl@gmail.com>
+# SPDX-License-Identifier: MIT
+
+# On every published GitHub release, download the exact `.crate` that
+# release-plz published to crates.io (verifying its SHA-256 against the
+# crates.io checksum), generate a CycloneDX SBOM and a signed SLSA
+# build-provenance attestation for it, then attach the SBOM, the Sigstore
+# provenance bundle, and the crate itself to the release so consumers can
+# run `gh attestation verify` against them and supply-chain scanners (e.g.
+# OpenSSF Scorecard Signed-Releases) can see the signature.
+#
+# `workflow_dispatch` is the escape hatch for re-attesting an older tag.
+
+name: Release attestations
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to re-attest (e.g. v0.16.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  attest:
+    name: Generate SBOM and provenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download the published crate from crates.io
+        id: artefact
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          name="sql_query_analyzer-${version}.crate"
+          curl -sfL -A "sql-query-analyzer-release-attestations" \
+            "https://static.crates.io/crates/sql_query_analyzer/${name}" -o "$name"
+          expected=$(curl -sf -A "sql-query-analyzer-release-attestations" \
+            "https://crates.io/api/v1/crates/sql_query_analyzer/${version}" |
+            jq -r '.version.checksum')
+          actual=$(sha256sum "$name" | cut -d' ' -f1)
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Downloaded crate sha256 $actual does not match the crates.io checksum $expected" >&2
+            exit 1
+          fi
+          echo "path=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@dfcb83b97731532d72be422cbc51ee64adb6fd56 # v0.24.4
+        with:
+          path: ./
+          format: cyclonedx-json
+          output-file: sql-query-analyzer-sbom.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate build provenance attestation
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            ${{ steps.artefact.outputs.path }}
+            sql-query-analyzer-sbom.cdx.json
+
+      - name: Attach SBOM, provenance bundle, and crate to GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          CRATE: ${{ steps.artefact.outputs.path }}
+        run: |
+          set -euo pipefail
+          cp "$BUNDLE" sql-query-analyzer-provenance.sigstore.json
+          gh release upload "$TAG" \
+            sql-query-analyzer-sbom.cdx.json \
+            sql-query-analyzer-provenance.sigstore.json \
+            "$CRATE" \
+            --clobber

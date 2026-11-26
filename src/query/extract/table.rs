@@ -43,9 +43,6 @@ pub fn extract_from_table_factor(
             };
             extract_from_set_expr(&subquery.body, &mut ctx);
         }
-        TableFactor::TableFunction {
-            ..
-        } => {}
         TableFactor::NestedJoin {
             table_with_joins, ..
         } => {

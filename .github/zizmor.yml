@@ -6,22 +6,9 @@
 
 rules:
   # crates.io trusted publishing is not configured for this crate yet;
-  # publishing authenticates with a scoped CRATES_IO_TOKEN secret.
+  # publishing authenticates with a scoped CRATES_IO_TOKEN secret, which
+  # the manual publish step of the Release-plz workflow passes to
+  # release-plz.
   use-trusted-publishing:
     ignore:
-      - _publish.yml
-      - publish-version.yml
-
-  # softprops/action-gh-release creates the release from generated notes
-  # and attaches multiple asset globs in a single declarative step; the
-  # equivalent gh-cli script adds more surface than it removes.
-  superfluous-actions:
-    ignore:
-      - _release.yml
-
-  # These two jobs push with git (the release tag and the regenerated
-  # CHANGELOG.md), so their checkouts must keep credentials.
-  artipacked:
-    ignore:
-      - _tag.yml
-      - _changelog.yml
+      - release-plz.yml

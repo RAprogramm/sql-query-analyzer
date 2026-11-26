@@ -11,6 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Hits-of-Code](https://hitsofcode.com/github/RAprogramm/sql-query-analyzer?branch=main&exclude=Cargo.lock,.gitignore,CHANGELOG.md)](https://hitsofcode.com/github/RAprogramm/sql-query-analyzer/view?branch=main&exclude=Cargo.lock,.gitignore,CHANGELOG.md)
 [![REUSE status](https://api.reuse.software/badge/github.com/RAprogramm/sql-query-analyzer)](https://api.reuse.software/info/github.com/RAprogramm/sql-query-analyzer)
+[![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/RAprogramm/sql-query-analyzer?utm_source=oss&utm_medium=github&utm_campaign=RAprogramm%2Fsql-query-analyzer&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai/RAprogramm/sql-query-analyzer)
 
 **Static analysis and LLM-powered optimization for SQL queries.**
 
@@ -170,7 +171,7 @@ ollama_url = "http://localhost:11434"
 max_retries = 3
 initial_delay_ms = 1000
 max_delay_ms = 30000
-backoff_factor = 2.0
+backoff_factor = 2
 ```
 
 ### Environment Variables
@@ -475,7 +476,7 @@ sql-query-analyzer analyze -s schema.sql -q queries.sql
 
 ## ClickHouse Support
 
-The analyzer includes a preprocessor that handles ClickHouse-specific DDL constructs not supported by the underlying SQL parser:
+The analyzer includes a preprocessor that handles ClickHouse-specific DDL constructs not supported by the underlying SQL parser, plus a dedicated set of ClickHouse best-practice rules that activate only with `--dialect clickhouse`.
 
 ### Supported Constructs
 
@@ -485,6 +486,38 @@ The analyzer includes a preprocessor that handles ClickHouse-specific DDL constr
 | `TTL` | `TTL event_date + INTERVAL 90 DAY` | Data expiration rules |
 | `SETTINGS` | `SETTINGS index_granularity = 8192` | Table-level settings |
 | `PARTITION BY` | `PARTITION BY toYYYYMM(date)` | Partitioning expressions |
+| `SAMPLE BY` | `SAMPLE BY intHash32(id)` | Sampling key |
+| Skipping index | `INDEX idx col TYPE minmax GRANULARITY 4` | Data skipping indexes |
+| Projection | `PROJECTION p (SELECT ... ORDER BY ...)` | Pre-aggregated views of a table |
+| Dictionary | `CREATE DICTIONARY d (...)` | Key-value lookup dictionaries |
+| Materialized view | `CREATE MATERIALIZED VIEW mv TO dest AS SELECT ...` | Incremental views (engine clause stripped) |
+| Mutation | `ALTER TABLE t UPDATE/DELETE ...` | Rewritten to standard statements for analysis |
+| Query clauses | `PREWHERE`, `FINAL`, `WITH TOTALS`, `WITH FILL` | ClickHouse query modifiers |
+
+### ClickHouse Rules
+
+When the ClickHouse dialect is selected, the OLTP index-suggestion rules are replaced by ClickHouse-aware rules that reason about the sparse primary key, partition pruning, and columnar storage:
+
+| Rule | Severity | Description |
+|------|----------|-------------|
+| `CH001` | Info | `SELECT *` reads every column file |
+| `CH002` | Warning | WHERE does not use the sort key prefix |
+| `CH003` | Warning | WHERE does not match `PARTITION BY` |
+| `CH004` | Warning | Function on a date column disables the index |
+| `CH005` | Info | Filter column has no sort key or skipping index |
+| `CH006` | Info | `LowCardinality` on a likely high-cardinality column |
+| `CH007` | Info | `Nullable` column used in a hot filter path |
+| `CH009` | Info | `uniqExact` where approximate `uniq` suffices |
+| `CH010` | Info | Multiple count subqueries replaceable by `countIf` |
+| `CH011` | Warning | `ORDER BY` in a subquery without `LIMIT` |
+| `CH012` | Info | `GROUP BY` prefix differs from the sort key |
+| `CH016` | Info | Multi-table JOIN (prefer dictionary/denormalization) |
+| `CH019` | Warning | `FINAL` forces read-time deduplication |
+| `CH021` | Info | `WHERE` filter that could use `PREWHERE` |
+| `CH022` | Warning | `ALTER UPDATE/DELETE` mutation is heavy |
+| `CH023` | Warning | Manual `OPTIMIZE TABLE ... FINAL` |
+| `CH024` | Info | JOIN against a table that exists as a dictionary |
+| `CH025` | Info | `GROUP BY` on a plain `String` key (prefer `LowCardinality`) |
 
 ### Example
 

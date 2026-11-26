@@ -3,6 +3,9 @@
 
 name: MSRV
 
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:
@@ -21,8 +24,8 @@ jobs:
           persist-credentials: false
       - name: Get MSRV from Cargo.toml
         id: msrv
-        run: echo "version=$(grep '^rust-version' Cargo.toml | sed 's/.*= *\"\([^\"]*\)\".*/\1/')" >> $GITHUB_OUTPUT
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        run: echo "version=$(grep '^rust-version' Cargo.toml | sed 's/.*= *\"\([^\"]*\)\".*/\1/')" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: ${{ steps.msrv.outputs.version }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2

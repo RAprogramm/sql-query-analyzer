@@ -4,6 +4,8 @@
 //! Benchmarks for the static analysis pipeline: schema parsing, query
 //! parsing, rule execution and report formatting.
 
+use std::fmt::Write;
+
 use divan::{Bencher, black_box};
 use sql_query_analyzer::{
     config::RulesConfig,
@@ -54,40 +56,46 @@ const QUERY_TEMPLATES: &[&str] = &[
 ];
 
 fn queries_sql(count: usize) -> String {
-    (0..count)
-        .map(|i| {
-            let template = QUERY_TEMPLATES[i % QUERY_TEMPLATES.len()];
-            let table_suffix = (i / QUERY_TEMPLATES.len()) % SCHEMA_TABLES;
-            format!("{};\n", template.replace("{n}", &table_suffix.to_string()))
-        })
-        .collect()
+    let mut sql = String::new();
+    for i in 0..count {
+        let template = QUERY_TEMPLATES[i % QUERY_TEMPLATES.len()];
+        let table_suffix = (i / QUERY_TEMPLATES.len()) % SCHEMA_TABLES;
+        let _ = writeln!(
+            sql,
+            "{};",
+            template.replace("{n}", &table_suffix.to_string())
+        );
+    }
+    sql
 }
 
 fn schema_sql(tables: usize) -> String {
     let mut sql = String::new();
     for n in 0..tables {
-        sql.push_str(&format!(
+        let _ = write!(
+            sql,
             "CREATE TABLE users{n} (id INT PRIMARY KEY, name VARCHAR(255) NOT NULL, email VARCHAR(255) NOT NULL, status VARCHAR(32), created_at TIMESTAMP, last_login TIMESTAMP);\n\
              CREATE TABLE orders{n} (id INT PRIMARY KEY, user_id INT NOT NULL, total DECIMAL(10, 2), status VARCHAR(32), created_at TIMESTAMP);\n\
              CREATE TABLE products{n} (id INT PRIMARY KEY, name VARCHAR(255), price DECIMAL(10, 2), category_id INT);\n\
              CREATE UNIQUE INDEX idx_users{n}_email ON users{n}(email);\n\
              CREATE INDEX idx_orders{n}_user ON orders{n}(user_id, created_at);\n"
-        ));
+        );
     }
     sql
 }
 
 fn clickhouse_schema_sql(tables: usize) -> String {
-    (0..tables)
-        .map(|n| {
-            format!(
-                "CREATE TABLE events{n} (id UInt64, user_id UInt64, ts DateTime CODEC(Delta, ZSTD), payload String CODEC(ZSTD(3))) \
-                 ENGINE = MergeTree PARTITION BY toYYYYMM(ts) ORDER BY (user_id, ts);\n\
-                 CREATE TABLE metrics{n} (name LowCardinality(String), ts DateTime CODEC(DoubleDelta), value Float64 CODEC(Gorilla, LZ4)) \
-                 ENGINE = MergeTree ORDER BY (name, ts) SETTINGS index_granularity = 8192, ttl_only_drop_parts = 1;\n"
-            )
-        })
-        .collect()
+    let mut sql = String::new();
+    for n in 0..tables {
+        let _ = write!(
+            sql,
+            "CREATE TABLE events{n} (id UInt64, user_id UInt64, ts DateTime CODEC(Delta, ZSTD), payload String CODEC(ZSTD(3))) \
+             ENGINE = MergeTree PARTITION BY toYYYYMM(ts) ORDER BY (user_id, ts);\n\
+             CREATE TABLE metrics{n} (name LowCardinality(String), ts DateTime CODEC(DoubleDelta), value Float64 CODEC(Gorilla, LZ4)) \
+             ENGINE = MergeTree ORDER BY (name, ts) SETTINGS index_granularity = 8192, ttl_only_drop_parts = 1;\n"
+        );
+    }
+    sql
 }
 
 fn parsed_schema() -> Schema {
@@ -99,11 +107,15 @@ fn parsed_queries(count: usize) -> Vec<Query> {
 }
 
 fn report(count: usize) -> AnalysisReport {
-    let runner = RuleRunner::with_schema_and_config(parsed_schema(), RulesConfig::default());
+    let runner = RuleRunner::with_schema_and_config_and_dialect(
+        SqlDialect::Generic,
+        parsed_schema(),
+        &RulesConfig::default()
+    );
     runner.analyze(&parsed_queries(count))
 }
 
-fn output_options(format: OutputFormat) -> OutputOptions {
+const fn output_options(format: OutputFormat) -> OutputOptions {
     OutputOptions {
         format,
         colored: false,
@@ -151,7 +163,11 @@ fn analyze_rules(bencher: Bencher, count: usize) {
 
 #[divan::bench(args = SIZES)]
 fn analyze_rules_with_schema(bencher: Bencher, count: usize) {
-    let runner = RuleRunner::with_schema_and_config(parsed_schema(), RulesConfig::default());
+    let runner = RuleRunner::with_schema_and_config_and_dialect(
+        SqlDialect::Generic,
+        parsed_schema(),
+        &RulesConfig::default()
+    );
     let queries = parsed_queries(count);
     bencher.bench(|| runner.analyze(black_box(&queries)));
 }
@@ -160,7 +176,11 @@ fn analyze_rules_with_schema(bencher: Bencher, count: usize) {
 fn build_rule_runner_with_schema(bencher: Bencher) {
     let schema = parsed_schema();
     bencher.bench(|| {
-        RuleRunner::with_schema_and_config(black_box(schema.clone()), RulesConfig::default())
+        RuleRunner::with_schema_and_config_and_dialect(
+            SqlDialect::Generic,
+            black_box(schema.clone()),
+            &RulesConfig::default()
+        )
     });
 }
 
@@ -185,7 +205,11 @@ fn full_static_pipeline(bencher: Bencher, count: usize) {
     bencher.bench(|| {
         let schema = Schema::parse(black_box(&schema), SqlDialect::Generic).unwrap();
         let queries = parse_queries(black_box(&queries), SqlDialect::Generic).unwrap();
-        let runner = RuleRunner::with_schema_and_config(schema, RulesConfig::default());
+        let runner = RuleRunner::with_schema_and_config_and_dialect(
+            SqlDialect::Generic,
+            schema,
+            &RulesConfig::default()
+        );
         let report = runner.analyze(&queries);
         format_static_analysis(&report, &opts)
     });

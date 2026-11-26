@@ -5,16 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-
-- Add PERF017 rule detecting correlated subqueries ([#110](https://github.com/RAprogramm/sql-query-analyzer/issues/110)) ([b0e47bc](https://github.com/RAprogramm/sql-query-analyzer/commit/b0e47bceb5357302d5001e14e6ba59a72a648957))
-
-### Documentation
-
-- Update changelog [skip ci] ([3ffe437](https://github.com/RAprogramm/sql-query-analyzer/commit/3ffe4372b5481088fc85fff61bbef681ce8e9b7a))
-
 ## [0.15.0] - 2026-07-14
 
 ### Added
@@ -333,7 +323,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Use rustls instead of openssl for cross-compilation ([2bdf030](https://github.com/RAprogramm/sql-query-analyzer/commit/2bdf03097c563bce1c7b70eb613f6d58bc52b0c2))
 
-[Unreleased]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.15.0...HEAD
 [0.15.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.12.0...v0.13.0
@@ -349,7 +338,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.4.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.1.1...v0.2.0
-[0.1.1]: https://github.com/RAprogramm/sql-query-analyzer/compare/v1...v0.1.1
-[1]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.1.0...v1
+[0.1.1]: https://github.com/RAprogramm/sql-query-analyzer/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/RAprogramm/sql-query-analyzer/releases/tag/v0.1.0
 

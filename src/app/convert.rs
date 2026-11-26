@@ -31,7 +31,8 @@ use crate::{
 /// let dialect = convert_dialect(Dialect::Mysql);
 /// assert!(matches!(dialect, SqlDialect::MySQL));
 /// ```
-pub fn convert_dialect(dialect: Dialect) -> SqlDialect {
+#[must_use]
+pub const fn convert_dialect(dialect: Dialect) -> SqlDialect {
     match dialect {
         Dialect::Generic => SqlDialect::Generic,
         Dialect::Mysql => SqlDialect::MySQL,
@@ -62,7 +63,8 @@ pub fn convert_dialect(dialect: Dialect) -> SqlDialect {
 /// let format = convert_format(Format::Json);
 /// assert!(matches!(format, OutputFormat::Json));
 /// ```
-pub fn convert_format(format: Format) -> OutputFormat {
+#[must_use]
+pub const fn convert_format(format: Format) -> OutputFormat {
     match format {
         Format::Text => OutputFormat::Text,
         Format::Json => OutputFormat::Json,

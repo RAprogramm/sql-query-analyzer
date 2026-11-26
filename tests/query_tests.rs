@@ -8,7 +8,7 @@ fn test_parse_simple_select() {
     let sql = "SELECT id, name FROM users WHERE id = 1";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Select);
+    assert_eq!(queries[0].kind, QueryType::Select);
     assert_eq!(queries[0].tables.len(), 1);
     assert_eq!(queries[0].tables[0].as_str(), "users");
     assert!(queries[0].where_cols.iter().any(|c| c.as_str() == "id"));
@@ -19,7 +19,7 @@ fn test_parse_select_star() {
     let sql = "SELECT * FROM orders";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Select);
+    assert_eq!(queries[0].kind, QueryType::Select);
     assert_eq!(queries[0].tables[0].as_str(), "orders");
 }
 
@@ -43,7 +43,7 @@ fn test_parse_insert() {
     let sql = "INSERT INTO users (id, name) VALUES (1, 'test')";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Insert);
+    assert_eq!(queries[0].kind, QueryType::Insert);
     assert_eq!(queries[0].tables[0].as_str(), "users");
 }
 
@@ -52,7 +52,7 @@ fn test_parse_update() {
     let sql = "UPDATE users SET name = 'new' WHERE id = 1";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Update);
+    assert_eq!(queries[0].kind, QueryType::Update);
     assert_eq!(queries[0].tables[0].as_str(), "users");
     assert!(queries[0].where_cols.iter().any(|c| c.as_str() == "id"));
 }
@@ -62,7 +62,7 @@ fn test_parse_update_without_where() {
     let sql = "UPDATE users SET status = 'inactive'";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Update);
+    assert_eq!(queries[0].kind, QueryType::Update);
     assert!(queries[0].where_cols.is_empty());
 }
 
@@ -71,7 +71,7 @@ fn test_parse_delete() {
     let sql = "DELETE FROM users WHERE id = 1";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Delete);
+    assert_eq!(queries[0].kind, QueryType::Delete);
     assert!(queries[0].where_cols.iter().any(|c| c.as_str() == "id"));
 }
 
@@ -80,7 +80,7 @@ fn test_parse_delete_without_where() {
     let sql = "DELETE FROM users";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Delete);
+    assert_eq!(queries[0].kind, QueryType::Delete);
     assert!(queries[0].where_cols.is_empty());
 }
 
@@ -399,7 +399,7 @@ fn test_recursive_cte() {
     let sql = "WITH RECURSIVE nums AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM nums WHERE n < 10) SELECT * FROM nums";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert_eq!(queries.len(), 1);
-    assert!(!queries[0].cte_names.is_empty());
+    assert_ne!(queries[0].cte_names, [] as [compact_str::CompactString; 0]);
 }
 
 #[test]
@@ -443,7 +443,7 @@ fn test_clickhouse_simple_select() {
     let sql = "SELECT id, name FROM users WHERE id = 1";
     let queries = parse_queries(sql, SqlDialect::ClickHouse).unwrap();
     assert_eq!(queries.len(), 1);
-    assert_eq!(queries[0].query_type, QueryType::Select);
+    assert_eq!(queries[0].kind, QueryType::Select);
 }
 
 #[test]
@@ -515,4 +515,43 @@ fn test_left_join_extracts_join_cols() {
     let sql = "SELECT u.id FROM users u LEFT JOIN orders o ON o.user_id = u.id";
     let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
     assert!(!queries[0].join_cols.is_empty());
+}
+
+#[test]
+fn test_case_expressions_and_compound_identifiers() {
+    let sql = "SELECT x FROM t WHERE t.a = 1 \
+               AND CASE t.a WHEN 1 THEN t.b ELSE t.c END > 0 \
+               AND CASE WHEN t.d > 0 THEN 1 ELSE 0 END = 1";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    let cols = &queries[0].where_cols;
+    for expected in ["a", "b", "c", "d"] {
+        assert!(
+            cols.iter().any(|c| c.as_str() == expected),
+            "column {expected} missing: {cols:?}"
+        );
+    }
+}
+
+#[test]
+fn test_window_function_with_compound_partition_and_order() {
+    let sql = "SELECT sum(t.a) OVER (PARTITION BY t.b ORDER BY t.c) FROM t";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    let wf = &queries[0].window_funcs[0];
+    assert!(
+        wf.partition_cols.iter().any(|c| c.as_str() == "b"),
+        "{wf:?}"
+    );
+    assert!(wf.order_cols.iter().any(|c| c.as_str() == "c"), "{wf:?}");
+}
+
+#[test]
+fn test_window_functions_in_nested_binary_and_case() {
+    let sql = "SELECT (count(*) OVER ()) + 1, \
+               CASE WHEN sum(a) OVER () > 0 THEN 1 ELSE min(b) OVER () END FROM t";
+    let queries = parse_queries(sql, SqlDialect::Generic).unwrap();
+    assert!(
+        queries[0].window_funcs.len() >= 3,
+        "expected windows in binary, nested and case branches: {:?}",
+        queries[0].window_funcs
+    );
 }
