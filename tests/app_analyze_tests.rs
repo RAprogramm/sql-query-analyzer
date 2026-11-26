@@ -1,7 +1,11 @@
 // SPDX-FileCopyrightText: 2025 RAprogramm
 // SPDX-License-Identifier: MIT
 
-use std::io::{Read, Write};
+use std::{
+    fs::write,
+    io::{Read, Write},
+    thread::spawn
+};
 
 use sql_query_analyzer::{
     app::{AnalyzeParams, run_analyze},
@@ -12,7 +16,7 @@ use sql_query_analyzer::{
 fn mock_ollama_server(body: &'static str) -> String {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
-    std::thread::spawn(move || {
+    spawn(move || {
         if let Ok((mut sock, _)) = listener.accept() {
             let mut buf = [0u8; 8192];
             let _ = sock.read(&mut buf);
@@ -32,8 +36,8 @@ async fn run_analyze_with_llm_appends_analysis() {
     let dir = tempfile::tempdir().unwrap();
     let schema = dir.path().join("schema.sql");
     let queries = dir.path().join("queries.sql");
-    std::fs::write(&schema, "CREATE TABLE users (id INT PRIMARY KEY);").unwrap();
-    std::fs::write(&queries, "SELECT * FROM users WHERE id = 1;").unwrap();
+    write(&schema, "CREATE TABLE users (id INT PRIMARY KEY);").unwrap();
+    write(&queries, "SELECT * FROM users WHERE id = 1;").unwrap();
     let params = AnalyzeParams {
         schema_path:   schema.to_string_lossy().into_owned(),
         queries_path:  queries.to_string_lossy().into_owned(),
@@ -57,8 +61,8 @@ async fn run_analyze_llm_failure_propagates_error() {
     let dir = tempfile::tempdir().unwrap();
     let schema = dir.path().join("schema.sql");
     let queries = dir.path().join("queries.sql");
-    std::fs::write(&schema, "CREATE TABLE users (id INT PRIMARY KEY);").unwrap();
-    std::fs::write(&queries, "SELECT * FROM users;").unwrap();
+    write(&schema, "CREATE TABLE users (id INT PRIMARY KEY);").unwrap();
+    write(&queries, "SELECT * FROM users;").unwrap();
     let params = AnalyzeParams {
         schema_path:   schema.to_string_lossy().into_owned(),
         queries_path:  queries.to_string_lossy().into_owned(),

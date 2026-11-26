@@ -61,9 +61,7 @@ fn emit_array(items: &[Value], indent: usize, first_on_current_line: bool, out: 
         return;
     }
     for (i, item) in items.iter().enumerate() {
-        if i == 0 && first_on_current_line {
-            // cursor already positioned for the dash
-        } else {
+        if i > 0 || !first_on_current_line {
             push_indent(out, indent);
         }
         out.push_str("- ");
