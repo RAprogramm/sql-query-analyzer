@@ -171,7 +171,7 @@ ollama_url = "http://localhost:11434"
 max_retries = 3
 initial_delay_ms = 1000
 max_delay_ms = 30000
-backoff_factor = 2.0
+backoff_factor = 2
 ```
 
 ### Environment Variables
